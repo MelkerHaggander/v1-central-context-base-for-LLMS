@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/lib/api";
+import { clearBoundTabUser, notifySessionChanged } from "@/lib/tab-session";
 import { Button } from "./ui";
 
 export function TopBar({ email }: { email: string }) {
@@ -21,6 +22,8 @@ export function TopBar({ email }: { email: string }) {
       setError(result.error.message);
       return;
     }
+    clearBoundTabUser();
+    notifySessionChanged();
     // { data: { success: true } } -> tillbaka till inloggning.
     router.replace("/");
   }

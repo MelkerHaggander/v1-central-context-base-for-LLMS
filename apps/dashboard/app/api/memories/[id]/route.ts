@@ -1,6 +1,6 @@
 // MOCK. PATCH /api/memories/:id -> uppdaterat minne, eller error-objekt.
 import { mockDb } from "@/lib/mock/db";
-import { currentAccount, jsonError, jsonOk } from "@/lib/mock/session";
+import { currentAccount, jsonError, jsonOwned } from "@/lib/mock/session";
 import { proxyToUpstream } from "@/lib/upstream";
 
 export const dynamic = "force-dynamic";
@@ -33,5 +33,5 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       result.error.code === "NOT_FOUND" ? 404 : result.error.code.startsWith("INVALID_") ? 400 : 500;
     return jsonError(result.error.code, result.error.message, status);
   }
-  return jsonOk(result.data);
+  return jsonOwned(result.data, account.id);
 }

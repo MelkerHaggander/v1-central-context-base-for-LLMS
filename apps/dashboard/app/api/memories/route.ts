@@ -3,7 +3,7 @@
 //   POST -> minnesobjekt, 201
 //   ej inloggad -> { error: { code: "UNAUTHENTICATED" } }, 401
 import { mockDb } from "@/lib/mock/db";
-import { currentAccount, jsonError, jsonOk } from "@/lib/mock/session";
+import { currentAccount, jsonError, jsonOwned } from "@/lib/mock/session";
 import { proxyToUpstream } from "@/lib/upstream";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   });
 
   if ("error" in result) return jsonError(result.error.code, result.error.message, 400);
-  return jsonOk(result.data);
+  return jsonOwned(result.data, account.id);
 }
 
 export async function POST(request: Request) {
@@ -53,5 +53,5 @@ export async function POST(request: Request) {
     const status = result.error.code.startsWith("INVALID_") ? 400 : 500;
     return jsonError(result.error.code, result.error.message, status);
   }
-  return jsonOk(result.data, 201);
+  return jsonOwned(result.data, account.id, 201);
 }

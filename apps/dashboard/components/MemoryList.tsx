@@ -9,7 +9,7 @@ import { Button, ErrorText, inputClass } from "./ui";
 
 const REFRESH_MS = 10_000;
 
-export function MemoryList() {
+export function MemoryList({ userId }: { userId: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [project, setProject] = useState("");
@@ -33,13 +33,16 @@ export function MemoryList() {
       project: project || undefined,
       category: category || undefined,
       offset: offset || undefined,
+      expectedUserId: userId,
     });
     if (my !== seq.current) return;
     setLoading(false);
 
     if ("error" in result) {
-      if (result.error.code === "UNAUTHENTICATED") {
-        router.replace("/");
+      setMemories(null);
+      setKnownProjects([]);
+      if (result.error.code === "UNAUTHENTICATED" || result.error.code === "ACCOUNT_SWITCHED") {
+        router.replace(result.error.code === "ACCOUNT_SWITCHED" ? "/dashboard" : "/");
         return;
       }
       setError(result.error);
@@ -48,12 +51,10 @@ export function MemoryList() {
     setError(null);
     setMemories(result);
     setFetchedAt(new Date());
-    setKnownProjects((prev) => {
-      const next = new Set(prev);
-      result.forEach((m) => next.add(m.project));
-      return [...next].sort((a, b) => a.localeCompare(b, "sv"));
-    });
-  }, [query, project, category, offset, router]);
+    const projects = new Set<string>();
+    result.forEach((m) => projects.add(m.project));
+    setKnownProjects([...projects].sort((a, b) => a.localeCompare(b, "sv")));
+  }, [query, project, category, offset, router, userId]);
 
   // Ny sökning/filter -> hämta direkt (liten fördröjning på textsök).
   useEffect(() => {

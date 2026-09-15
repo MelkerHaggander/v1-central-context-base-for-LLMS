@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = createSupabaseAnonClient();
+    await supabase.auth.signOut();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.session || !data.user) {
       return fail(request, form, "credentials");

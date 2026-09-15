@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, ErrorText, inputClass } from "@/components/ui";
 import { login, session } from "@/lib/api";
+import { bindTabUser, decideTabSession, getBoundTabUser, notifySessionChanged } from "@/lib/tab-session";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,11 +13,15 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ code?: string; message: string } | null>(null);
 
-  // Redan inloggad -> direkt till listan.
+  // Redan inloggad som samma konto som den här fliken -> listan.
+  // Om cookien tillhör ett annat konto stannar vi här så minnen inte blandas.
   useEffect(() => {
     (async () => {
       const result = await session();
-      if (!("error" in result) && result.data) router.replace("/dashboard");
+      if ("error" in result || !result.data) return;
+      const decision = decideTabSession(getBoundTabUser(), result.data.id);
+      if (decision.action === "mismatch") return;
+      router.replace("/dashboard");
     })();
   }, [router]);
 
@@ -31,6 +36,8 @@ export default function LoginPage() {
       setError(result.error);
       return;
     }
+    bindTabUser(result.data.id);
+    notifySessionChanged();
     router.replace("/dashboard");
   }
 

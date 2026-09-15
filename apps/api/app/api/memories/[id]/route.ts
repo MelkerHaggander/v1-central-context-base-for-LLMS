@@ -1,5 +1,5 @@
 import { createMemoryApi, createSupabaseStore } from "@v1/memory";
-import { jsonError, jsonOk } from "@/lib/http";
+import { jsonError, jsonOwned } from "@/lib/http";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -40,5 +40,5 @@ export async function PATCH(
           : 500;
     return jsonError(result.error.code, result.error.message, status);
   }
-  return jsonOk(result.data);
+  return jsonOwned(result.data, data.user.id);
 }

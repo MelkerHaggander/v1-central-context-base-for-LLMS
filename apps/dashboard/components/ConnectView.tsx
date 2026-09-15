@@ -1,28 +1,24 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { SessionGate } from "@/components/SessionGate";
 import { TopBar } from "@/components/TopBar";
 import { CopyButton, ErrorText } from "@/components/ui";
-import { useSession } from "@/components/useSession";
 import { CLAUDE_INSTRUCTIONS } from "@/lib/claude-instructions";
 
 export function ConnectView({ url }: { url: string }) {
-  const { user, error } = useSession();
+  const [resolvedUrl, setResolvedUrl] = useState(url);
 
-  if (user === undefined) {
-    return <main className="p-6 text-sm text-muted">Kontrollerar inloggning…</main>;
-  }
-  if (!user) {
-    return (
-      <main className="mx-auto w-full max-w-md p-6">
-        <ErrorText message={error ?? "Ogiltig session. Logga in igen."} />
-      </main>
-    );
-  }
+  useEffect(() => {
+    if (!url) setResolvedUrl(`${window.location.origin}/api/mcp`);
+  }, [url]);
 
   return (
-    <>
-      <TopBar email={user.email} />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
+    <SessionGate>
+      {(user) => (
+        <>
+          <TopBar email={user.email} />
+          <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <h1 className="text-xl font-semibold">Anslut Claude till ditt minne</h1>
         <p className="mt-1 text-sm text-muted">
           Fyra steg. Inget installeras lokalt. Claude ansluter via fjärr-MCP och får bara se
@@ -35,15 +31,15 @@ export function ConnectView({ url }: { url: string }) {
           </Step>
 
           <Step n={2} title="Kopiera MCP-adressen">
-            {url ? (
+            {resolvedUrl ? (
               <div className="flex flex-wrap items-center gap-2">
                 <code className="flex-1 break-all rounded-md border border-line bg-background px-3 py-2 text-sm">
-                  {url}
+                  {resolvedUrl}
                 </code>
-                <CopyButton text={url} />
+                <CopyButton text={resolvedUrl} />
               </div>
             ) : (
-              <ErrorText message="MCP-adressen är inte satt. Sätt API_BASE_URL (eller NEXT_PUBLIC_MCP_URL) i Vercel till previewen för integration/v1." />
+              <ErrorText message="MCP-adressen saknas. Öppna sidan på Vercel-adressen, eller sätt NEXT_PUBLIC_MCP_URL." />
             )}
             <p className="mt-2 text-sm text-muted">
               I Claude Desktop: <em>Settings → Connectors → Add custom connector</em>. Klistra in
@@ -82,7 +78,9 @@ export function ConnectView({ url }: { url: string }) {
           </ol>
         </section>
       </main>
-    </>
+        </>
+      )}
+    </SessionGate>
   );
 }
 
