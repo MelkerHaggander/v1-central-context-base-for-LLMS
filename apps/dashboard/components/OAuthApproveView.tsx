@@ -14,6 +14,8 @@ export type OAuthApproveProps = {
   state: string;
   codeChallenge: string;
   codeChallengeMethod: string;
+  /** OAuth resource (RFC 8707). ChatGPT skickar MCP-URL:en. Claude utelämnar den ofta. */
+  resource?: string;
   email?: string;
   /** Feltext från ?error=… (redan översatt). */
   errorText?: string;
@@ -28,10 +30,11 @@ export type OAuthApproveProps = {
 export const OAUTH_ERROR_TEXT: Record<string, string> = {
   credentials: "Fel mejl eller lösenord.",
   config: "Servern saknar Supabase-koppling.",
-  client: "Claude-klienten kunde inte verifieras. Starta om Connect i Claude Desktop.",
-  invalid: "Ogiltig OAuth-begäran. Öppna adressen från Claude Desktop, inte direkt.",
+  client: "Klienten kunde inte verifieras. Starta om Connect i Claude, ChatGPT eller Kimi.",
+  invalid: "Ogiltig OAuth-begäran. Öppna adressen från klienten, inte direkt.",
+  resource: "Fel MCP-adress i OAuth-begäran. Använd samma /api/mcp som du kopplade.",
   store: "Inloggningen gick igenom men koden kunde inte sparas. Försök igen.",
-  denied: "Du nekade åtkomst. Claude kan inte läsa eller spara dina minnen.",
+  denied: "Du nekade åtkomst. Klienten kan inte läsa eller spara dina minnen.",
 };
 
 const input =
@@ -67,30 +70,30 @@ export function OAuthApproveView(p: OAuthApproveProps) {
 
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Claude-minne</p>
-        <h1 className="mt-1 text-2xl font-semibold">Ge Claude åtkomst till ditt minne?</h1>
+        <h1 className="mt-1 text-2xl font-semibold">Ge klienten åtkomst till ditt minne?</h1>
       </div>
 
       {p.result === "connected" ? (
         <StatusBox tone="ok" title="Ansluten">
-          Claude får nu spara, söka och uppdatera minnen som tillhör{" "}
+          Klienten får nu spara, söka och uppdatera minnen som tillhör{" "}
           <strong>{p.email || "ditt konto"}</strong>. Du kan stänga det här fönstret och gå
-          tillbaka till Claude.
+          tillbaka till Claude, ChatGPT eller Kimi.
         </StatusBox>
       ) : p.result === "denied" ? (
         <StatusBox tone="bad" title="Nekad">
-          {OAUTH_ERROR_TEXT.denied} Stäng fönstret och klicka Connect i Claude igen om du ångrar
+          {OAUTH_ERROR_TEXT.denied} Stäng fönstret och anslut igen om du ångrar
           dig.
         </StatusBox>
       ) : !p.valid ? (
         <StatusBox tone="bad" title="Ogiltig begäran">
-          {OAUTH_ERROR_TEXT.invalid}
+          {p.errorText || OAUTH_ERROR_TEXT.invalid}
         </StatusBox>
       ) : (
         <>
           <ul className="rounded-md border border-line bg-panel px-4 py-3 text-sm">
-            <li className="py-1">Claude får <strong>spara</strong> fakta, beslut, mål, deadlines och preferenser.</li>
-            <li className="py-1">Claude får <strong>söka och uppdatera</strong> dina minnen.</li>
-            <li className="py-1">Claude ser <strong>aldrig</strong> andra kontons minnen.</li>
+            <li className="py-1">Klienten får <strong>spara</strong> fakta, beslut, mål, deadlines och preferenser.</li>
+            <li className="py-1">Klienten får <strong>söka och uppdatera</strong> dina minnen.</li>
+            <li className="py-1">Klienten ser <strong>aldrig</strong> andra kontons minnen.</li>
           </ul>
 
           <form className="flex flex-col gap-3" method="post" action={action}>
@@ -104,6 +107,7 @@ export function OAuthApproveView(p: OAuthApproveProps) {
             <input type="hidden" name="state" value={p.state} />
             <input type="hidden" name="code_challenge" value={p.codeChallenge} />
             <input type="hidden" name="code_challenge_method" value={p.codeChallengeMethod} />
+            {p.resource ? <input type="hidden" name="resource" value={p.resource} /> : null}
 
             <label className="flex flex-col gap-1 text-sm">
               E-post

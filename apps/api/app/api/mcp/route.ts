@@ -2,6 +2,7 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { z } from "zod";
+import { MEMORY_INSTRUCTIONS, MCP_SERVER_INFO } from "@/lib/mcp-instructions";
 import { createMcpTokenStore } from "@/lib/oauth/mcp-memory-store";
 import { getMcpSession } from "@/lib/oauth/sessions";
 import { createSupabaseUserClient } from "@/lib/supabase/clients";
@@ -91,7 +92,10 @@ const handler = createMcpHandler(
       async (input, extra) => jsonTool(await memoryApi(extra).updateMemory(mcpUserId(extra), input)),
     );
   },
-  { serverInfo: { name: "v1-memory", version: "0.1.0" } },
+  {
+    serverInfo: MCP_SERVER_INFO,
+    instructions: MEMORY_INSTRUCTIONS,
+  },
   { basePath: "/api", disableSse: true, maxDuration: 60 },
 );
 

@@ -16,6 +16,7 @@ export function GET(request: Request) {
       token_endpoint_auth_methods_supported: ["none"],
       scopes_supported: ["memory"],
       client_id_metadata_document_supported: true,
+      resource_parameter_supported: true,
     },
     {
       headers: {

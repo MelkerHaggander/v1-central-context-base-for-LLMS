@@ -1,6 +1,8 @@
 import { pkceChallenge } from "@/lib/oauth/crypto";
+import { canonicalMcpResource, resourceAllowed } from "@/lib/oauth/resource";
 import { consumeCode } from "@/lib/oauth/store";
 import { issueMcpTokens, rotateMcpRefresh, type IssuedTokens } from "@/lib/oauth/sessions";
+import { publicOrigin } from "@/lib/oauth/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +11,7 @@ const TOKEN_HEADERS = {
   "Access-Control-Allow-Origin": "*",
 };
 
-function tokenJson(issued: IssuedTokens) {
+function tokenJson(issued: IssuedTokens, resource?: string) {
   return Response.json(
     {
       access_token: issued.access_token,
@@ -17,6 +19,7 @@ function tokenJson(issued: IssuedTokens) {
       expires_in: issued.expires_in,
       refresh_token: issued.refresh_token,
       scope: "memory",
+      ...(resource ? { resource } : {}),
     },
     { headers: TOKEN_HEADERS },
   );
@@ -33,6 +36,12 @@ export async function POST(request: Request) {
   try {
     const params = await readParams(request);
     const grant = String(params.grant_type ?? "");
+    const origin = publicOrigin(request);
+    const resource = String(params.resource ?? "").trim();
+    if (resource && !resourceAllowed(origin, resource)) {
+      return Response.json({ error: "invalid_target" }, { status: 400, headers: TOKEN_HEADERS });
+    }
+    const boundResource = resource ? canonicalMcpResource(origin) : undefined;
 
     if (grant === "refresh_token") {
       const refreshToken = String(params.refresh_token ?? "");
@@ -43,7 +52,7 @@ export async function POST(request: Request) {
       if (!issued) {
         return Response.json({ error: "invalid_grant" }, { status: 400, headers: TOKEN_HEADERS });
       }
-      return tokenJson(issued);
+      return tokenJson(issued, boundResource);
     }
 
     if (grant !== "authorization_code") {
@@ -71,7 +80,7 @@ export async function POST(request: Request) {
       supabaseAccess: row.access_token,
       supabaseRefresh: row.refresh_token,
     });
-    return tokenJson(issued);
+    return tokenJson(issued, boundResource);
   } catch (error) {
     console.error("oauth_token_failed", error);
     return Response.json({ error: "server_error" }, { status: 500, headers: TOKEN_HEADERS });

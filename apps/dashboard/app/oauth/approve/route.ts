@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const s = (key: string) => String(form.get(key) ?? "");
 
   const back = new URL("/oauth/authorize", request.url);
-  for (const key of ["client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method"]) {
+  for (const key of ["client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method", "resource"]) {
     if (s(key)) back.searchParams.set(key, s(key));
   }
   if (s("email")) back.searchParams.set("email", s("email"));
