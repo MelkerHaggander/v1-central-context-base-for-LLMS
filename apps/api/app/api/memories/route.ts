@@ -1,5 +1,5 @@
 import { createMemoryApi, createSupabaseStore } from "@v1/memory";
-import { jsonError, jsonOk } from "@/lib/http";
+import { jsonError, jsonOwned } from "@/lib/http";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   if ("error" in result) {
     return jsonError(result.error.code, result.error.message, 400);
   }
-  return jsonOk(result.data);
+  return jsonOwned(result.data, auth.userId);
 }
 
 export async function POST(request: Request) {
@@ -56,5 +56,5 @@ export async function POST(request: Request) {
     const status = result.error.code.startsWith("INVALID_") ? 400 : 500;
     return jsonError(result.error.code, result.error.message, status);
   }
-  return jsonOk(result.data, 201);
+  return jsonOwned(result.data, auth.userId, 201);
 }

@@ -12,8 +12,12 @@ const NO_STORE = {
   Pragma: "no-cache",
 };
 
-export function jsonOk(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: NO_STORE });
+export function jsonOk(body: unknown, status = 200, extraHeaders?: Record<string, string>) {
+  return NextResponse.json(body, { status, headers: { ...NO_STORE, ...extraHeaders } });
+}
+
+export function jsonOwned(body: unknown, userId: string, status = 200) {
+  return jsonOk(body, status, { "X-V1-User-Id": userId });
 }
 
 export function jsonError(code: string, message: string, status = 400) {

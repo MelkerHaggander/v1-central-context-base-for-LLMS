@@ -19,6 +19,9 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
+  // En cookie-burk per webbläsare. Rensa förra kontot innan nästa loggas in,
+  // så chunkade auth-cookies inte blandas mellan Melker och Filip.
+  await supabase.auth.signOut();
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
