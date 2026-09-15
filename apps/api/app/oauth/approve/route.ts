@@ -1,6 +1,8 @@
 import { createSupabaseAnonClient } from "@/lib/supabase/clients";
 import { randomToken } from "@/lib/oauth/crypto";
+import { resourceAllowed } from "@/lib/oauth/resource";
 import { getClient, redirectAllowed, saveCode } from "@/lib/oauth/store";
+import { publicOrigin } from "@/lib/oauth/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,8 @@ function fail(request: Request, form: FormData, code: string) {
   back.searchParams.set("state", String(form.get("state") ?? ""));
   back.searchParams.set("code_challenge", String(form.get("code_challenge") ?? ""));
   back.searchParams.set("code_challenge_method", String(form.get("code_challenge_method") ?? "S256"));
+  const resource = String(form.get("resource") ?? "").trim();
+  if (resource) back.searchParams.set("resource", resource);
   back.searchParams.set("error", code);
   const email = String(form.get("email") ?? "").trim();
   if (email) back.searchParams.set("email", email);
@@ -26,9 +30,13 @@ export async function POST(request: Request) {
   const method = String(form.get("code_challenge_method") ?? "S256");
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
+  const resource = String(form.get("resource") ?? "").trim();
 
   if (method !== "S256" || !clientId || !redirectUri || !codeChallenge) {
     return fail(request, form, "invalid");
+  }
+  if (resource && !resourceAllowed(publicOrigin(request), resource)) {
+    return fail(request, form, "resource");
   }
 
   try {

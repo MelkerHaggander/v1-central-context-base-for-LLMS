@@ -31,6 +31,7 @@ export default async function AuthorizePage({
       state={str("state")}
       codeChallenge={codeChallenge}
       codeChallengeMethod={method}
+      resource={str("resource") || undefined}
       email={str("email")}
       errorText={OAUTH_ERROR_TEXT[errorCode] ?? (errorCode ? "Kunde inte godkänna åtkomst." : undefined)}
       result={result}
