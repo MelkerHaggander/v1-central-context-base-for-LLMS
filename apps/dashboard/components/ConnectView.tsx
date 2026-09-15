@@ -46,7 +46,11 @@ export function ConnectView({ url }: { url: string }) {
                     Claude Desktop: Settings → Connectors → Add custom connector. Fjärranslutning
                     (Remote MCP).
                   </li>
-                  <li>ChatGPT: Developer mode. Samma adress.</li>
+                  <li>
+                    ChatGPT (webben): Settings → Security and login → Developer mode. Ny chatt →
+                    Plus → Developer mode → välj appen. Inloggning räcker inte — appen måste vara
+                    påslagen i just den chatten.
+                  </li>
                   <li>
                     Kimi Code:{" "}
                     <code className="text-xs">

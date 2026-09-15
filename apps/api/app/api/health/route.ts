@@ -11,5 +11,6 @@ export function GET() {
     anonKeySet: Boolean(getSupabaseAnonKey()),
     supabaseEnv: supabaseEnvSource(),
     serviceRoleSet: Boolean(getSupabaseServiceRoleKey()),
+    mcp: "1.5.0",
   });
 }

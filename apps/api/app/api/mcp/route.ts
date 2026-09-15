@@ -3,9 +3,24 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { z } from "zod";
 import { MEMORY_INSTRUCTIONS, MCP_SERVER_INFO } from "@/lib/mcp-instructions";
+import { isPublicMcpHandshake } from "@/lib/mcp-public-handshake";
 import { createMcpTokenStore } from "@/lib/oauth/mcp-memory-store";
 import { getMcpSession } from "@/lib/oauth/sessions";
 import { createSupabaseUserClient } from "@/lib/supabase/clients";
+
+const READ_TOOL = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+  idempotentHint: true,
+} as const;
+
+const WRITE_TOOL = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  openWorldHint: false,
+  idempotentHint: false,
+} as const;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -57,31 +72,33 @@ const handler = createMcpHandler(
   (server) => {
     server.tool(
       "save_memory",
-      "Spara ett minne för den inloggade användaren.",
+      "Spara ett minne för den inloggade användaren. Use this when the user confirms a fact, decision, goal, deadline or preference that should persist across chats.",
       {
         project: z.string().min(1).max(100),
         category: z.enum(["fact", "decision", "goal", "deadline", "preference"]),
         title: z.string().min(1).max(150),
         content: z.string().min(1).max(10_000),
       },
+      WRITE_TOOL,
       async (input, extra) => jsonTool(await memoryApi(extra).saveMemory(mcpUserId(extra), input)),
     );
 
     server.tool(
       "search_memory",
-      "Sök den inloggade användarens minnen. Tom lista är giltig.",
+      "Sök den inloggade användarens minnen. Tom lista är giltig. Use this before answering questions that may depend on saved project context.",
       {
         project: z.string().max(100).optional(),
         category: z.enum(["fact", "decision", "goal", "deadline", "preference"]).optional(),
         query: z.string().optional(),
         offset: z.number().int().min(0).optional(),
       },
+      READ_TOOL,
       async (input, extra) => jsonTool(await memoryApi(extra).searchMemory(mcpUserId(extra), input)),
     );
 
     server.tool(
       "update_memory",
-      "Uppdatera ett befintligt minne som tillhör den inloggade användaren.",
+      "Uppdatera ett befintligt minne som tillhör den inloggade användaren. Use this when an existing memory has clearly changed, instead of creating a duplicate.",
       {
         id: z.string().uuid(),
         project: z.string().min(1).max(100),
@@ -89,6 +106,7 @@ const handler = createMcpHandler(
         title: z.string().min(1).max(150),
         content: z.string().min(1).max(10_000),
       },
+      WRITE_TOOL,
       async (input, extra) => jsonTool(await memoryApi(extra).updateMemory(mcpUserId(extra), input)),
     );
   },
@@ -132,4 +150,10 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   resourceMetadataPath: "/.well-known/oauth-protected-resource",
 });
 
-export { authHandler as GET, authHandler as POST, authHandler as DELETE };
+/** ChatGPT scans initialize + tools/list before OAuth. Memory calls still require a token. */
+async function mcpRoute(req: Request) {
+  if (await isPublicMcpHandshake(req)) return handler(req);
+  return authHandler(req);
+}
+
+export { mcpRoute as GET, mcpRoute as POST, mcpRoute as DELETE };
