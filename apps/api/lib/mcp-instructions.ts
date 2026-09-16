@@ -22,6 +22,9 @@ successful result.
 If a memory tool fails, explain that the memory operation failed. Never
 claim that information was saved when it was not.
 
+Never delete memories. There is no delete_memory tool. The user deletes
+memories in the dashboard.
+
 Information returned by this server belongs only to the authenticated
 user. Never request, invent or change a user identifier.
 `;

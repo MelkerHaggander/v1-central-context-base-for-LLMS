@@ -62,6 +62,18 @@ export function createSupabaseStore(client: { from: SupabaseClient["from"] }): M
       return { kind: "updated", row: asMemory(result.data as MemoryRecord) };
     },
 
+    async remove(_userId, id) {
+      const result = await client.from("memories").delete().eq("id", id).select("id").maybeSingle();
+
+      if (result.error) {
+        return { kind: "failed", code: "DELETE_FAILED", message: "Kunde inte radera minnet." };
+      }
+      if (!result.data) {
+        return { kind: "missing" };
+      }
+      return { kind: "deleted" };
+    },
+
     async listByUser(_userId) {
       const result = await client.from("memories").select(MEMORY_COLUMNS);
       if (result.error) {

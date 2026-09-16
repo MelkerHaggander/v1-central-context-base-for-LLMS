@@ -13,6 +13,7 @@ export type FakeSupabaseOptions = {
   failSelect?: boolean;
   failInsert?: boolean;
   failUpdate?: boolean;
+  failDelete?: boolean;
 };
 
 type Filter = { column: string; value: unknown };
@@ -30,6 +31,7 @@ type FakeContext = {
   failSelect: boolean;
   failInsert: boolean;
   failUpdate: boolean;
+  failDelete: boolean;
 };
 
 function clientColumns(row: FakeStoredRow): MemoryRecord {
@@ -64,7 +66,7 @@ function matchesFilters(row: FakeStoredRow, filters: Filter[]): boolean {
 }
 
 class MemoriesQuery {
-  #op: "select" | "insert" | "update" = "select";
+  #op: "select" | "insert" | "update" | "delete" = "select";
   #payload: Record<string, unknown> | null = null;
   #filters: Filter[] = [];
   #result: Promise<QueryResult> | undefined;
@@ -80,6 +82,11 @@ class MemoriesQuery {
   update(fields: Record<string, unknown>) {
     this.#op = "update";
     this.#payload = fields;
+    return this;
+  }
+
+  delete() {
+    this.#op = "delete";
     return this;
   }
 
@@ -119,6 +126,7 @@ class MemoriesQuery {
   #execute(mode: "single" | "maybe" | "many"): QueryResult {
     if (this.#op === "insert") return this.#insert();
     if (this.#op === "update") return this.#update(mode);
+    if (this.#op === "delete") return this.#delete(mode);
     return this.#select(mode);
   }
 
@@ -194,6 +202,29 @@ class MemoriesQuery {
     return { data: clientColumns(row), error: null };
   }
 
+  #delete(mode: "single" | "maybe" | "many"): QueryResult {
+    if (this.ctx.failDelete) {
+      return { data: null, error: { code: "XX000", message: "delete failed" } };
+    }
+
+    const matches = this.#visible().filter((row) => matchesFilters(row, this.#filters));
+    if (matches.length === 0) {
+      return {
+        data: null,
+        error: mode === "single" ? { code: "PGRST116", message: "0 rows" } : null,
+      };
+    }
+
+    const row = matches[0];
+    if (!row) {
+      return { data: null, error: null };
+    }
+
+    const index = this.ctx.rows.indexOf(row);
+    if (index >= 0) this.ctx.rows.splice(index, 1);
+    return { data: clientColumns(row), error: null };
+  }
+
   #select(mode: "single" | "maybe" | "many"): QueryResult {
     if (this.ctx.failSelect) {
       return { data: null, error: { code: "XX000", message: "select failed" } };
@@ -222,6 +253,7 @@ export function createFakeSupabase(options: FakeSupabaseOptions): { from: Supaba
     failSelect: options.failSelect ?? false,
     failInsert: options.failInsert ?? false,
     failUpdate: options.failUpdate ?? false,
+    failDelete: options.failDelete ?? false,
   };
 
   return {

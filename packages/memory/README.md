@@ -13,7 +13,7 @@ Efter integration anropas **samma funktioner** av dashboardens serverkod och av 
 Importera från `@v1/memory`:
 
 - `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`
-- `saveMemory`, `searchMemory`, `updateMemory`
+- `saveMemory`, `searchMemory`, `updateMemory`, `deleteMemory`
 - `createMemoryApi`, `createInMemoryStore`, `createSupabaseStore`, `toIso`
 
 `Result<T>` är `{ data: T } | { error: { code, message } }`. Inte ett naket minne. `user_id` är första argumentet, aldrig ett fält i svaret.
@@ -53,7 +53,8 @@ Merga inte PR #13. Den har fel Result-form och fel query-städning.
 - Sortering `updated_at` fallande. `offset` hoppar rader. Sidstorlek 50.
 - Tider ut: `YYYY-MM-DDTHH:MM:SSZ` (millisekunder bort). Update låser `id` och `created_at`, sätter alltid ny `updated_at`.
 - Saknad rad och annan ägare ger samma `NOT_FOUND`: `Minnet finns inte eller tillhör ett annat konto.`
-- IO-fel behåller Alfredos koder `SAVE_FAILED`, `SEARCH_FAILED`, `UPDATE_FAILED`.
+- IO-fel behåller Alfredos koder `SAVE_FAILED`, `SEARCH_FAILED`, `UPDATE_FAILED`, `DELETE_FAILED`.
+- `deleteMemory` är dashboard-HTTP. MCP har inget radera-verktyg och MCP-token kan inte radera.
 
 ## Hur Claude-instruktioner mappar
 

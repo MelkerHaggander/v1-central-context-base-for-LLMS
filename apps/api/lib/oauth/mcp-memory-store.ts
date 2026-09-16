@@ -91,6 +91,11 @@ export function createMcpTokenStore(mcpAccess: string): MemoryStore {
       return { kind: "failed", code: "UPDATE_FAILED", message: "Kunde inte uppdatera minnet." };
     },
 
+    async remove() {
+      // MCP-token får aldrig radera. Radering finns bara via inloggad dashboard-session.
+      return { kind: "missing" };
+    },
+
     async listByUser() {
       const { data, error } = await supabase.rpc("mcp_list_memories", { p_access: mcpAccess });
       if (error || data == null) {

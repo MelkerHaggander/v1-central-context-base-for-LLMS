@@ -48,7 +48,7 @@ Ogiltig `category`, tom `title`, `project` över 100 tecken eller `content` öve
 
 Fälten trimmas före kontroll, och det trimmade värdet är det som sparas. En `title` med bara blanksteg räknas därför som tom.
 
-Felkoder som får förekomma: `INVALID_PROJECT`, `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_CATEGORY`, `INVALID_ID`, `INVALID_OFFSET`, `NOT_FOUND`, `INVALID_CREDENTIALS`. Vid flera ogiltiga fält returneras ett enda fel, i ordningen `project`, `title`, `content`, `category`.
+Felkoder som får förekomma: `INVALID_PROJECT`, `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_CATEGORY`, `INVALID_ID`, `INVALID_OFFSET`, `NOT_FOUND`, `INVALID_CREDENTIALS`, `DELETE_FAILED`. Vid flera ogiltiga fält returneras ett enda fel, i ordningen `project`, `title`, `content`, `category`.
 
 ## Inloggning
 
@@ -96,6 +96,19 @@ Ut vid fel (finns inte, tillhör annan användare, ogiltiga fält): error-objekt
 
 Om raden inte finns, och om den tillhör ett annat konto, returneras **samma** fel med samma kod och samma text. Felet får inte avslöja om ett `id` existerar.
 
+### Dashboard-HTTP: radera (inte MCP)
+
+Radering finns bara mot den inloggade cookie-sessionen. Claude, ChatGPT och Grok har inget `delete_memory`. MCP-token kan inte radera.
+
+`DELETE /api/memories/:id`
+
+- Inloggad: `{ "success": true }` och header `X-V1-User-Id`
+- Inte inloggad: `{ "error": { "code": "UNAUTHENTICATED", "message": "Inte inloggad." } }`, 401
+- Ogiltigt `id`: `{ "error": { "code": "INVALID_ID", "message": "id måste vara ett UUID." } }`, 400
+- Saknas eller tillhör annat konto: samma `NOT_FOUND` som `update_memory`, 404
+
+Redigera från dashboarden använder samma `PATCH /api/memories/:id` som `update_memory`. Alla fält krävs.
+
 ## Hjärnans funktioner (Melker) — samma kontrakt
 
 TypeScript-funktioner som både dashboard-API och MCP anropar efter ihopkoppling:
@@ -103,9 +116,10 @@ TypeScript-funktioner som både dashboard-API och MCP anropar efter ihopkoppling
 - validera `category` / längder
 - spara (skapar `id` + tidsstämplar via backend/lagring)
 - uppdatera via `id`
+- radera via `id` (dashboard-HTTP, inte MCP)
 - söka (`query`, `project`, `category`, `offset`) med senast uppdaterat först
 
-Exporterade namn: `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`, `saveMemory`, `searchMemory`, `updateMemory`. Det är `searchMemory` i singular, inte `searchMemories`.
+Exporterade namn: `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`, `saveMemory`, `searchMemory`, `updateMemory`, `deleteMemory`. Det är `searchMemory` i singular, inte `searchMemories`.
 
 De tre huvudfunktionerna tar `user_id` som första argument, hämtat ur anroparens session. Modulen tar aldrig emot `user_id` från verktygsindata och kontrollerar det aldrig mot Claudes inskickade värden, eftersom sådana inte finns.
 
@@ -113,6 +127,6 @@ Simulerad lagring hos Melker och riktig Supabase hos Alfredo ska ge **samma form
 
 ## Säkerhet
 
-Konto A får aldrig läsa eller uppdatera Konto B:s minnen, även om minnes-`id` är känt. Tester måste visa det.
+Konto A får aldrig läsa, uppdatera eller radera Konto B:s minnen, även om minnes-`id` är känt. Tester måste visa det.
 
 Lösenord, nycklar och tokens hör inte i git, inte i Confluence och inte i PR-beskrivningar. Hamnar de där räcker det inte att ta bort dem, kontona måste bytas.
