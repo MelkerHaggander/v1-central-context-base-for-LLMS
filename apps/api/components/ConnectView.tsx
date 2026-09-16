@@ -53,6 +53,13 @@ export function ConnectView({ url }: { url: string }) {
                     <code className="text-xs">grok: oauth-first</code>.
                   </li>
                   <li>
+                    ChatGPT (webben): Settings → Apps → skapa appen från MCP-adressen. Authentication
+                    = Mixed (initialize/list utan nyckel). Sedan ny chatt → Plus → Developer mode →
+                    slå på appen i just den chatten. Om verktygen saknas: ta bort appen och skapa om
+                    den efter att <code className="text-xs">/api/health</code> visar{" "}
+                    <code className="text-xs">chatgpt: mixed-auth</code>.
+                  </li>
+                  <li>
                     Kimi Code:{" "}
                     <code className="text-xs">
                       kimi mcp add --transport http --auth oauth central-memory {resolvedUrl || "https://DIN-DOMÄN/api/mcp"}
@@ -64,9 +71,9 @@ export function ConnectView({ url }: { url: string }) {
                 {isVercelPreviewMcp(resolvedUrl) ? (
                   <p className="mt-2 text-sm text-red-700">
                     ChatGPT kan inte använda den här preview-adressen. Vercel-inloggning stoppar
-                    ChatGPT:s servrar. Klistra in{" "}
-                    <code className="text-xs">https://v1-alfredo-experiment.vercel.app/api/mcp</code>
-                    {" "}efter att den deploymenten är Production på experiment-Verceln.
+                    ChatGPT:s servrar. Klistra in production-adressen till{" "}
+                    <code className="text-xs">/api/mcp</code>, inte en <code className="text-xs">-git-</code>{" "}
+                    preview.
                   </p>
                 ) : null}
               </Step>

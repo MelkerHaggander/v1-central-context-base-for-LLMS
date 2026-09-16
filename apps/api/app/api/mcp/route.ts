@@ -8,6 +8,7 @@ import {
 } from "@/lib/mcp-chatgpt";
 import { MEMORY_INSTRUCTIONS, MCP_SERVER_INFO } from "@/lib/mcp-instructions";
 import {
+  isOAuthFirstClient,
   mcpCorsPreflightResponse,
   mcpUnauthorizedResponse,
   shouldChallengeMcpOAuth,
@@ -190,7 +191,8 @@ async function mcpRoute(req: Request) {
       return mcpUnauthorizedResponse(req);
     }
 
-    if (body !== undefined ? isPublicMcpBody(body) : await isPublicMcpHandshake(req)) {
+    const publicHandshake = body !== undefined ? isPublicMcpBody(body) : await isPublicMcpHandshake(req);
+    if (publicHandshake && !isOAuthFirstClient(req, body)) {
       return withChatGptToolList(await handler(req));
     }
     return withChatGptToolList(await authHandler(req));

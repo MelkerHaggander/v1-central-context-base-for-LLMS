@@ -39,11 +39,11 @@ describe("ChatGPT mixed-auth metadata", () => {
   });
 
   it("puts error + error_description in the MCP auth challenge", () => {
-    const challenge = mcpWwwAuthenticate("https://v1-alfredo-experiment.vercel.app");
-    assert.match(challenge, /resource_metadata="https:\/\/v1-alfredo-experiment\.vercel\.app\/.well-known\/oauth-protected-resource\/api\/mcp"/);
+    const challenge = mcpWwwAuthenticate("https://mcp.example.test");
+    assert.match(challenge, /resource_metadata="https:\/\/mcp\.example\.test\/.well-known\/oauth-protected-resource\/api\/mcp"/);
     assert.match(challenge, /error="invalid_token"/);
     assert.match(challenge, /error_description=/);
-    const result = memoryAuthRequiredResult("https://v1-alfredo-experiment.vercel.app");
+    const result = memoryAuthRequiredResult("https://mcp.example.test");
     assert.equal(result.isError, true);
     assert.deepEqual(result._meta["mcp/www_authenticate"], [challenge]);
   });

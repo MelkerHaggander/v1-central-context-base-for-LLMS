@@ -3,13 +3,14 @@ import { describe, it } from "node:test";
 import {
   grokNeedsConnectOAuth,
   hasBearerToken,
+  isOAuthFirstClient,
   isToolsCallBody,
   mcpCorsPreflightResponse,
   mcpUnauthorizedResponse,
   shouldChallengeMcpOAuth,
 } from "../lib/mcp-oauth-challenge";
 
-const MCP = "https://v1-alfredo-experiment.vercel.app/api/mcp";
+const MCP = "https://mcp.example.test/api/mcp";
 
 function req(init?: RequestInit & { url?: string }) {
   const { url = MCP, ...rest } = init ?? {};
@@ -49,8 +50,8 @@ describe("Grok MCP OAuth challenge", () => {
     const res = mcpUnauthorizedResponse(
       req({
         headers: {
-          host: "v1-alfredo-experiment.vercel.app",
-          "x-forwarded-host": "v1-alfredo-experiment.vercel.app",
+          host: "mcp.example.test",
+          "x-forwarded-host": "mcp.example.test",
           "x-forwarded-proto": "https",
         },
       }),
@@ -59,7 +60,7 @@ describe("Grok MCP OAuth challenge", () => {
     const challenge = res.headers.get("WWW-Authenticate") ?? "";
     assert.match(
       challenge,
-      /resource_metadata="https:\/\/v1-alfredo-experiment\.vercel\.app\/.well-known\/oauth-protected-resource\/api\/mcp"/,
+      /resource_metadata="https:\/\/mcp\.example\.test\/.well-known\/oauth-protected-resource\/api\/mcp"/,
     );
     assert.match(challenge, /error="invalid_token"/);
     assert.match(challenge, /scope="memory"/);
@@ -86,6 +87,8 @@ describe("Grok MCP OAuth challenge", () => {
       true,
     );
     assert.equal(shouldChallengeMcpOAuth(req({ method: "POST" }), chatgptInitialize()), false);
+    assert.equal(isOAuthFirstClient(req(), grokInitialize()), true);
+    assert.equal(isOAuthFirstClient(req({ headers: { "user-agent": "ChatGPT-User" } }), chatgptInitialize()), false);
     assert.equal(
       shouldChallengeMcpOAuth(
         req({ method: "POST", headers: { "user-agent": "ChatGPT-User" } }),
@@ -109,6 +112,13 @@ describe("Grok MCP OAuth challenge", () => {
         params: { clientInfo: { name: "claude-ai" } },
       }),
       true,
+    );
+    assert.equal(
+      shouldChallengeMcpOAuth(
+        req({ method: "POST", headers: { "user-agent": "ChatGPT-User" } }),
+        { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "search_memory" } },
+      ),
+      false,
     );
     assert.equal(
       shouldChallengeMcpOAuth(req({ method: "POST" }), {

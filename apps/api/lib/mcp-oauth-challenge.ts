@@ -78,17 +78,22 @@ export function isToolsCallBody(body: unknown) {
   return msgs.some((msg) => (msg as { method?: unknown } | null)?.method === "tools/call");
 }
 
+/** Claude/Grok/Kimi: login first. ChatGPT lists tools first, then OAuth in-band on tools/call. */
+export function isOAuthFirstClient(req: Request, body?: unknown): boolean {
+  if (isMixedAuthClient(req, body)) return false;
+  if (grokNeedsConnectOAuth(req, body)) return true;
+  return Boolean(clientName(body));
+}
+
 /**
- * ChatGPT mixed-auth: public initialize/tools/list.
+ * ChatGPT mixed-auth: public initialize/tools/list, in-band OAuth on tools/call.
  * Grok/Claude-style clients: HTTP 401 + WWW-Authenticate starts the login popup.
- * Named clients that are not ChatGPT are OAuth-first (clientInfo only exists on initialize).
  */
 export function shouldChallengeMcpOAuth(req: Request, body?: unknown): boolean {
   if (hasBearerToken(req)) return false;
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "DELETE") return true;
-  if (isToolsCallBody(body)) return true;
   if (isMixedAuthClient(req, body)) return false;
-  if (grokNeedsConnectOAuth(req, body)) return true;
-  return Boolean(clientName(body));
+  if (isOAuthFirstClient(req, body)) return true;
+  return isToolsCallBody(body);
 }

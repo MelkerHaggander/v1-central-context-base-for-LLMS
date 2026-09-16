@@ -71,9 +71,9 @@ export function ConnectView({ url }: { url: string }) {
                 {isVercelPreviewMcp(resolvedUrl) ? (
                   <p className="mt-2 text-sm text-red-700">
                     ChatGPT kan inte använda den här preview-adressen. Vercel-inloggning stoppar
-                    ChatGPT:s servrar. Klistra in{" "}
-                    <code className="text-xs">https://v1-alfredo-experiment.vercel.app/api/mcp</code>
-                    {" "}efter att den deploymenten är Production på experiment-Verceln.
+                    ChatGPT:s servrar. Klistra in production-adressen till{" "}
+                    <code className="text-xs">/api/mcp</code>, inte en <code className="text-xs">-git-</code>{" "}
+                    preview.
                   </p>
                 ) : null}
               </Step>
