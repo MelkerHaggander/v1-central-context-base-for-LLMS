@@ -13,6 +13,7 @@ export function GET() {
     serviceRoleSet: Boolean(getSupabaseServiceRoleKey()),
     mcp: "1.5.0",
     chatgpt: "mixed-auth",
+    grok: "oauth-first",
     mcpAuth: "lifetime",
   });
 }

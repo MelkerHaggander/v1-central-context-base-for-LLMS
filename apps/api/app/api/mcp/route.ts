@@ -7,7 +7,12 @@ import {
   withChatGptToolList,
 } from "@/lib/mcp-chatgpt";
 import { MEMORY_INSTRUCTIONS, MCP_SERVER_INFO } from "@/lib/mcp-instructions";
-import { isPublicMcpHandshake } from "@/lib/mcp-public-handshake";
+import {
+  mcpCorsPreflightResponse,
+  mcpUnauthorizedResponse,
+  shouldChallengeMcpOAuth,
+} from "@/lib/mcp-oauth-challenge";
+import { isPublicMcpHandshake, isPublicMcpBody } from "@/lib/mcp-public-handshake";
 import { mcpOrigin, runMcpRequest } from "@/lib/mcp-request-context";
 import { createMcpTokenStore } from "@/lib/oauth/mcp-memory-store";
 import { getMcpSession } from "@/lib/oauth/sessions";
@@ -169,12 +174,28 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   resourceMetadataPath: "/.well-known/oauth-protected-resource/api/mcp",
 });
 
-/** ChatGPT lists tools before OAuth. Memory calls still require a token. */
+/** ChatGPT lists tools before OAuth. Grok only starts login after HTTP 401. */
 async function mcpRoute(req: Request) {
   return runMcpRequest(req, async () => {
-    if (await isPublicMcpHandshake(req)) return withChatGptToolList(await handler(req));
+    let body: unknown;
+    if (req.method === "POST") {
+      try {
+        body = await req.clone().json();
+      } catch {
+        body = undefined;
+      }
+    }
+
+    if (shouldChallengeMcpOAuth(req, body)) {
+      return mcpUnauthorizedResponse(req);
+    }
+
+    if (body !== undefined ? isPublicMcpBody(body) : await isPublicMcpHandshake(req)) {
+      return withChatGptToolList(await handler(req));
+    }
     return withChatGptToolList(await authHandler(req));
   });
 }
 
 export { mcpRoute as GET, mcpRoute as POST, mcpRoute as DELETE };
+export { mcpCorsPreflightResponse as OPTIONS };
