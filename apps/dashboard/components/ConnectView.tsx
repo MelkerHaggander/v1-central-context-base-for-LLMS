@@ -18,7 +18,7 @@ export function ConnectView({ url }: { url: string }) {
         <>
           <TopBar email={user.email} />
           <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-            <h1 className="text-xl font-semibold">Anslut Claude, ChatGPT eller Kimi</h1>
+            <h1 className="text-xl font-semibold">Anslut Claude, ChatGPT, Grok eller Kimi</h1>
             <p className="mt-1 text-sm text-muted">
               Tre steg. Ingen projektprompt att klistra in. Servern talar om för klienten hur
               minnet ska användas. Bara minnen som tillhör <strong>{user.email}</strong> syns.
@@ -45,6 +45,12 @@ export function ConnectView({ url }: { url: string }) {
                   <li>
                     Claude Desktop: Settings → Connectors → Add custom connector. Fjärranslutning
                     (Remote MCP).
+                  </li>
+                  <li>
+                    Grok (grok.com): New Connector → Custom → samma MCP-adress. Inloggningen ska
+                    öppnas av sig själv (som i Claude). Om Grok bara listar verktyg utan login är
+                    deployn för gammal — <code className="text-xs">/api/health</code> ska visa{" "}
+                    <code className="text-xs">grok: oauth-first</code>.
                   </li>
                   <li>
                     ChatGPT (webben): Settings → Apps → skapa appen från MCP-adressen. Authentication

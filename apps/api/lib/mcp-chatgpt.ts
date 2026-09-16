@@ -1,11 +1,10 @@
 /** ChatGPT mixed-auth: list tools without a token, OAuth only when calling them. */
 
-export const CHATGPT_OAUTH_SCHEMES = [{ type: "oauth2" as const, scopes: ["memory"] }];
+import { mcpWwwAuthenticate } from "@/lib/mcp-oauth-challenge";
 
-export function mcpWwwAuthenticate(origin: string) {
-  const metadata = `${origin.replace(/\/$/, "")}/.well-known/oauth-protected-resource/api/mcp`;
-  return `Bearer realm="mcp", resource_metadata="${metadata}", error="invalid_token", error_description="Login required to call memory tools"`;
-}
+export { mcpWwwAuthenticate };
+
+export const CHATGPT_OAUTH_SCHEMES = [{ type: "oauth2" as const, scopes: ["memory"] }];
 
 export function memoryAuthRequiredResult(origin: string) {
   const challenge = mcpWwwAuthenticate(origin);
