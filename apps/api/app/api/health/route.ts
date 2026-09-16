@@ -12,5 +12,6 @@ export function GET() {
     supabaseEnv: supabaseEnvSource(),
     serviceRoleSet: Boolean(getSupabaseServiceRoleKey()),
     mcp: "1.5.0",
+    chatgpt: "mixed-auth",
   });
 }

@@ -1,4 +1,4 @@
-/** Handshake ChatGPT (and directories) run before OAuth. Tool calls stay protected. */
+/** Handshake ChatGPT runs before OAuth, sometimes with a leftover Bearer header. Tool calls stay protected. */
 export const PUBLIC_MCP_METHODS = new Set([
   "initialize",
   "notifications/initialized",
@@ -20,7 +20,6 @@ export function isPublicMcpBody(body: unknown): boolean {
 
 export async function isPublicMcpHandshake(req: Request): Promise<boolean> {
   if (req.method !== "POST") return false;
-  if (req.headers.get("authorization")) return false;
   try {
     return isPublicMcpBody(await req.clone().json());
   } catch {
