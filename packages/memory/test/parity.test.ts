@@ -83,6 +83,10 @@ async function runVector(apiA: Api, apiB: Api) {
     id: "550e8400-e29b-41d4-a716-446655440000",
     ...DEADLINE,
   });
+  const bDelete = await apiB.deleteMemory(USER_B, "data" in saved ? saved.data.id : "550e8400-e29b-41d4-a716-446655440000");
+  const unknownDelete = await apiB.deleteMemory(USER_B, "550e8400-e29b-41d4-a716-446655440000");
+  const aDelete = await apiA.deleteMemory(USER_A, "data" in fact ? fact.data.id : "");
+  const afterDelete = await apiA.searchMemory(USER_A, { project: "Projekt A" });
 
   return {
     saved,
@@ -100,6 +104,10 @@ async function runVector(apiA: Api, apiB: Api) {
     bSearch,
     bUpdate,
     unknown,
+    bDelete,
+    unknownDelete,
+    aDelete,
+    afterDelete,
   };
 }
 
@@ -153,6 +161,17 @@ test("in-memory and fake supabase return the same vector", async () => {
   assert.ok("error" in memory.bUpdate && "error" in memory.unknown);
   assert.equal(memory.bUpdate.error.code, "NOT_FOUND");
   assert.equal(memory.unknown.error.message, memory.bUpdate.error.message);
+
+  assert.ok("error" in memory.bDelete && "error" in memory.unknownDelete);
+  assert.equal(memory.bDelete.error.code, "NOT_FOUND");
+  assert.equal(memory.unknownDelete.error.message, memory.bDelete.error.message);
+
+  assert.deepEqual(memory.aDelete, { data: { success: true } });
+  assert.ok("data" in memory.afterDelete);
+  assert.deepEqual(
+    memory.afterDelete.data.map((row) => row.title),
+    ["Lanseringsdatum", "Stack för V1"],
+  );
 });
 
 test("update into another identical row is UPDATE_FAILED on both stores", async () => {
@@ -244,4 +263,11 @@ test("adapter IO failures keep Alfredo codes", async () => {
   });
   assert.ok("error" in update);
   assert.equal(update.error.code, "UPDATE_FAILED");
+
+  const deleteApi = createMemoryApi(
+    createSupabaseStore(createFakeSupabase({ userId: USER_A, failDelete: true })),
+  );
+  const deleted = await deleteApi.deleteMemory(USER_A, "550e8400-e29b-41d4-a716-446655440000");
+  assert.ok("error" in deleted);
+  assert.equal(deleted.error.code, "DELETE_FAILED");
 });

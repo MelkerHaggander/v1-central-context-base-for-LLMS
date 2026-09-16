@@ -42,3 +42,29 @@ export async function PATCH(
   }
   return jsonOwned(result.data, data.user.id);
 }
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
+  }
+
+  const { id } = await context.params;
+  const api = createMemoryApi(createSupabaseStore(supabase));
+  const result = await api.deleteMemory(data.user.id, id);
+
+  if ("error" in result) {
+    const status =
+      result.error.code === "NOT_FOUND"
+        ? 404
+        : result.error.code.startsWith("INVALID_")
+          ? 400
+          : 500;
+    return jsonError(result.error.code, result.error.message, status);
+  }
+  return jsonOwned(result.data, data.user.id);
+}

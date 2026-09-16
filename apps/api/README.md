@@ -38,6 +38,7 @@ Samma Vercel-projekt (Root Directory `apps/api`) visar Filips UI och Alfredos AP
 | POST | `/api/memories` och `/api/mcp/save_memory` | `save_memory` |
 | GET | `/api/memories` och POST `/api/mcp/search_memory` | `search_memory` |
 | PATCH | `/api/memories/:id` och POST `/api/mcp/update_memory` | `update_memory` |
+| DELETE | `/api/memories/:id` | Radera eget minne. Cookie-session. **Inte** MCP. |
 | GET | `/api/mcp` (Claude) | Fjärr-MCP, tre verktyg, OAuth. Token går inte ut. |
 | GET | `/oauth/authorize` | Filips OAuth-vy. Postar till `/oauth/approve` |
 

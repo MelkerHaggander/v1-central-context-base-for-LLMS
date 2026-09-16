@@ -14,6 +14,11 @@ describe("MCP-instruktioner V1.1", () => {
     assert.match(MEMORY_INSTRUCTIONS, /Never\nclaim that information was saved when it was not/);
   });
 
+  it("förbjuder radering via MCP", () => {
+    assert.match(MEMORY_INSTRUCTIONS, /Never delete memories/);
+    assert.match(MEMORY_INSTRUCTIONS, /no delete_memory tool/);
+  });
+
   it("serverinfo är 1.1", () => {
     assert.equal(MCP_SERVER_INFO.name, "central-context-memory");
     assert.equal(MCP_SERVER_INFO.version, "1.1.0");

@@ -7,6 +7,7 @@ export {
   saveMemory,
   searchMemory,
   updateMemory,
+  deleteMemory,
   createMemoryApi,
   type MemoryStore,
   type NormalizedMemoryInput,

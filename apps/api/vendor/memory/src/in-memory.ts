@@ -84,6 +84,15 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): MemoryS
       return { kind: "updated", row: asClient(row) };
     },
 
+    async remove(userId, memoryId) {
+      const index = rows.findIndex(
+        (candidate) => candidate.id === memoryId && candidate.user_id === userId,
+      );
+      if (index < 0) return { kind: "missing" };
+      rows.splice(index, 1);
+      return { kind: "deleted" };
+    },
+
     async listByUser(userId) {
       return rows.filter((row) => row.user_id === userId).map(asClient);
     },

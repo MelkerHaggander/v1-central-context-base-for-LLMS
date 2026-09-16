@@ -11,7 +11,7 @@ Projektet **finns redan** och migrationerna är applicerade. Lösenord och `serv
 | Dashboard | https://supabase.com/dashboard/project/uthkzkvpkkpzrmzjunqq |
 | API-URL | `https://uthkzkvpkkpzrmzjunqq.supabase.co` |
 
-Tabell `public.memories`: `id`, `user_id`, `project`, `category`, `title`, `content`, `created_at`, `updated_at`. RLS: SELECT/INSERT/UPDATE bara när `user_id = auth.uid()`. Ingen DELETE-policy. Anon har inga grants. Identiska dubbletter stoppas per konto.
+Tabell `public.memories`: `id`, `user_id`, `project`, `category`, `title`, `content`, `created_at`, `updated_at`. RLS: SELECT/INSERT/UPDATE/DELETE bara när `user_id = auth.uid()`. Anon har inga grants. Identiska dubbletter stoppas per konto. Radering går bara via dashboard-HTTP, inte MCP.
 
 ## Alfredo gör nu (dashboard)
 

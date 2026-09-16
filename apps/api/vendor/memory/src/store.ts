@@ -29,6 +29,14 @@ export type MemoryStore = {
     | { kind: "missing" }
     | { kind: "failed"; code: "UPDATE_FAILED"; message: string }
   >;
+  remove(
+    userId: string,
+    id: string,
+  ): Promise<
+    | { kind: "deleted" }
+    | { kind: "missing" }
+    | { kind: "failed"; code: "DELETE_FAILED"; message: string }
+  >;
   listByUser(userId: string): Promise<MemoryRecord[]>;
 };
 
@@ -113,11 +121,30 @@ export async function updateMemory(
   return fail("UPDATE_FAILED", "Kunde inte uppdatera minnet.");
 }
 
+export async function deleteMemory(
+  userId: string,
+  id: string,
+  store: MemoryStore,
+): Promise<Result<{ success: true }>> {
+  const idCheck = validateMemoryId(id);
+  if ("error" in idCheck) return idCheck;
+
+  const removed = await store.remove(userId, idCheck.data);
+  if (removed.kind === "deleted") {
+    return { data: { success: true } };
+  }
+  if (removed.kind === "missing") {
+    return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
+  }
+  return fail("DELETE_FAILED", "Kunde inte radera minnet.");
+}
+
 export function createMemoryApi(store: MemoryStore) {
   return {
     saveMemory: (userId: string, input: MemoryInput) => saveMemory(userId, input, store),
     searchMemory: (userId: string, input: SearchInput) => searchMemory(userId, input, store),
     updateMemory: (userId: string, input: MemoryInput & { id: string }) =>
       updateMemory(userId, input, store),
+    deleteMemory: (userId: string, id: string) => deleteMemory(userId, id, store),
   };
 }
