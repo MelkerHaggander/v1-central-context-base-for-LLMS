@@ -1,5 +1,5 @@
 /**
- * Inbyggda MCP-instruktioner (V1.5). Skickas i initialize.instructions
+ * Inbyggda MCP-instruktioner (V1.1). Skickas i initialize.instructions
  * så klienter inte behöver en inklistrad projektprompt.
  */
 export const MEMORY_INSTRUCTIONS = `Use this server as the user's persistent project memory.
@@ -28,5 +28,5 @@ user. Never request, invent or change a user identifier.
 
 export const MCP_SERVER_INFO = {
   name: "central-context-memory",
-  version: "1.5.0",
+  version: "1.1.0",
 } as const;

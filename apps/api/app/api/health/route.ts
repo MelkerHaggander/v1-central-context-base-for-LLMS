@@ -11,7 +11,7 @@ export function GET() {
     anonKeySet: Boolean(getSupabaseAnonKey()),
     supabaseEnv: supabaseEnvSource(),
     serviceRoleSet: Boolean(getSupabaseServiceRoleKey()),
-    mcp: "1.5.0",
+    mcp: "1.1.0",
     chatgpt: "mixed-auth",
     grok: "oauth-first",
     mcpAuth: "lifetime",
