@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { asMcpSession, asReusedMcpTokens } from "./session-parse";
-import { MCP_ACCESS_SECONDS, MCP_REFRESH_SECONDS } from "./sessions";
+import { MCP_NEVER_EXPIRES_AT, mcpClientExpiresIn } from "./sessions";
 
 const row = {
   user_id: "a9625693-0207-4f2b-bf34-f65964eaa346",
@@ -37,7 +37,11 @@ test("reuses the same MCP access and refresh tokens", () => {
   assert.deepEqual(asReusedMcpTokens({ oauth_reuse_session: reused }), reused);
 });
 
-test("MCP tokens are issued with a lifetime Claude will not expire", () => {
-  assert.equal(MCP_ACCESS_SECONDS, 2_147_483_647);
-  assert.equal(MCP_REFRESH_SECONDS, MCP_ACCESS_SECONDS);
+test("MCP token response expires_in does not overflow signed 32-bit unix time", () => {
+  const now = 1_789_547_000;
+  const expiresIn = mcpClientExpiresIn(now);
+  assert.equal(expiresIn, 2_147_483_647 - now - 86_400);
+  assert.ok(now + expiresIn < 2_147_483_647);
+  assert.ok(expiresIn > 300_000_000);
+  assert.equal(MCP_NEVER_EXPIRES_AT, "9999-12-31T00:00:00.000Z");
 });

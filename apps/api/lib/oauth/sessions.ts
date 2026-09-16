@@ -6,9 +6,20 @@ import { createSupabaseAnonClient } from "@/lib/supabase/clients";
 export type { McpSession } from "@/lib/oauth/session-parse";
 export { asMcpSession } from "@/lib/oauth/session-parse";
 
-/** Max signed 32-bit seconds. Claude treats this as "does not expire". */
-export const MCP_ACCESS_SECONDS = 2_147_483_647;
-export const MCP_REFRESH_SECONDS = 2_147_483_647;
+/** Postgres keeps the row until this date. oauth_get_session does not check the clock. */
+export const MCP_NEVER_EXPIRES_AT = "9999-12-31T00:00:00.000Z";
+
+const INT32_MAX = 2_147_483_647;
+
+/**
+ * `expires_in` in the OAuth token response.
+ * ChatGPT stores `now + expires_in` as a signed 32-bit unix time. 2^31-1
+ * overflows that sum, so the connector looks expired and asks to log in again.
+ * Stay below 2038-01-19. The server still never rejects the token.
+ */
+export function mcpClientExpiresIn(nowSeconds = Math.floor(Date.now() / 1000)) {
+  return Math.max(60, INT32_MAX - nowSeconds - 86_400);
+}
 
 const supabaseRefreshInflight = new Map<string, Promise<{ access: string; refresh: string } | null>>();
 const mcpRefreshInflight = new Map<string, Promise<IssuedTokens | null>>();
@@ -19,10 +30,6 @@ export type IssuedTokens = {
   expires_in: number;
   supabase_access: string;
 };
-
-function expiresAt(seconds: number) {
-  return new Date(Date.now() + seconds * 1000).toISOString();
-}
 
 export async function issueMcpTokens(input: {
   userId: string;
@@ -38,14 +45,14 @@ export async function issueMcpTokens(input: {
     p_user_id: input.userId,
     p_supabase_access: input.supabaseAccess,
     p_supabase_refresh: input.supabaseRefresh,
-    p_access_expires: expiresAt(MCP_ACCESS_SECONDS),
-    p_refresh_expires: expiresAt(MCP_REFRESH_SECONDS),
+    p_access_expires: MCP_NEVER_EXPIRES_AT,
+    p_refresh_expires: MCP_NEVER_EXPIRES_AT,
   });
   if (error) throw error;
   return {
     access_token,
     refresh_token,
-    expires_in: MCP_ACCESS_SECONDS,
+    expires_in: mcpClientExpiresIn(),
     supabase_access: input.supabaseAccess,
   };
 }
@@ -104,7 +111,7 @@ export async function rotateMcpRefresh(refreshToken: string): Promise<IssuedToke
       return {
         access_token: row.access_token,
         refresh_token: row.refresh_token,
-        expires_in: MCP_ACCESS_SECONDS,
+        expires_in: mcpClientExpiresIn(),
         supabase_access: row.supabase_access,
       };
     }
