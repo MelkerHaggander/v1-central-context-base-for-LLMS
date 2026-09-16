@@ -38,11 +38,20 @@ describe("ChatGPT public MCP handshake", () => {
     assert.equal(await isPublicMcpHandshake(req), true);
   });
 
-  it("keeps auth when a bearer token is present", async () => {
+  it("treats POST handshake as public even with a bearer token", async () => {
     const req = new Request("https://example.test/api/mcp", {
       method: "POST",
       headers: { authorization: "Bearer abc", "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    assert.equal(await isPublicMcpHandshake(req), true);
+  });
+
+  it("does not treat tools/call as a public handshake", async () => {
+    const req = new Request("https://example.test/api/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_memory" } }),
     });
     assert.equal(await isPublicMcpHandshake(req), false);
   });

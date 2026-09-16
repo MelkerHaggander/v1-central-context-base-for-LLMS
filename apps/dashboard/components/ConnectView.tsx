@@ -47,9 +47,11 @@ export function ConnectView({ url }: { url: string }) {
                     (Remote MCP).
                   </li>
                   <li>
-                    ChatGPT (webben): Settings → Security and login → Developer mode. Ny chatt →
-                    Plus → Developer mode → välj appen. Inloggning räcker inte — appen måste vara
-                    påslagen i just den chatten.
+                    ChatGPT (webben): Settings → Apps → skapa appen från MCP-adressen. Authentication
+                    = Mixed (initialize/list utan nyckel). Sedan ny chatt → Plus → Developer mode →
+                    slå på appen i just den chatten. Om verktygen saknas: ta bort appen och skapa om
+                    den efter att <code className="text-xs">/api/health</code> visar{" "}
+                    <code className="text-xs">chatgpt: mixed-auth</code>.
                   </li>
                   <li>
                     Kimi Code:{" "}
@@ -60,6 +62,14 @@ export function ConnectView({ url }: { url: string }) {
                     <code className="text-xs">kimi mcp auth central-memory</code>.
                   </li>
                 </ul>
+                {isVercelPreviewMcp(resolvedUrl) ? (
+                  <p className="mt-2 text-sm text-red-700">
+                    ChatGPT kan inte använda den här preview-adressen. Vercel-inloggning stoppar
+                    ChatGPT:s servrar. Klistra in{" "}
+                    <code className="text-xs">https://v1-alfredo-experiment.vercel.app/api/mcp</code>
+                    {" "}efter att den deploymenten är Production på experiment-Verceln.
+                  </p>
+                ) : null}
               </Step>
 
               <Step n={3} title="Godkänn åtkomst och börja chatta">
@@ -82,6 +92,14 @@ export function ConnectView({ url }: { url: string }) {
       )}
     </SessionGate>
   );
+}
+
+function isVercelPreviewMcp(url: string) {
+  try {
+    return new URL(url).hostname.includes("-git-");
+  } catch {
+    return false;
+  }
 }
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {

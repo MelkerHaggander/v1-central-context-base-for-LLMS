@@ -2,8 +2,13 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { z } from "zod";
+import {
+  memoryAuthRequiredResult,
+  withChatGptToolList,
+} from "@/lib/mcp-chatgpt";
 import { MEMORY_INSTRUCTIONS, MCP_SERVER_INFO } from "@/lib/mcp-instructions";
 import { isPublicMcpHandshake } from "@/lib/mcp-public-handshake";
+import { mcpOrigin, runMcpRequest } from "@/lib/mcp-request-context";
 import { createMcpTokenStore } from "@/lib/oauth/mcp-memory-store";
 import { getMcpSession } from "@/lib/oauth/sessions";
 import { createSupabaseUserClient } from "@/lib/supabase/clients";
@@ -68,6 +73,20 @@ function memoryApi(extra: { authInfo?: AuthInfo }) {
   return createMemoryApi(createSupabaseStore(userClient(extra)));
 }
 
+async function runMemoryTool(
+  extra: { authInfo?: AuthInfo },
+  run: (userId: string) => Promise<{ data?: unknown; error?: { code: string; message: string } }>,
+) {
+  try {
+    return jsonTool(await run(mcpUserId(extra)));
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHENTICATED") {
+      return memoryAuthRequiredResult(mcpOrigin());
+    }
+    throw error;
+  }
+}
+
 const handler = createMcpHandler(
   (server) => {
     server.tool(
@@ -80,7 +99,7 @@ const handler = createMcpHandler(
         content: z.string().min(1).max(10_000),
       },
       WRITE_TOOL,
-      async (input, extra) => jsonTool(await memoryApi(extra).saveMemory(mcpUserId(extra), input)),
+      async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).saveMemory(userId, input)),
     );
 
     server.tool(
@@ -93,7 +112,7 @@ const handler = createMcpHandler(
         offset: z.number().int().min(0).optional(),
       },
       READ_TOOL,
-      async (input, extra) => jsonTool(await memoryApi(extra).searchMemory(mcpUserId(extra), input)),
+      async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).searchMemory(userId, input)),
     );
 
     server.tool(
@@ -107,7 +126,7 @@ const handler = createMcpHandler(
         content: z.string().min(1).max(10_000),
       },
       WRITE_TOOL,
-      async (input, extra) => jsonTool(await memoryApi(extra).updateMemory(mcpUserId(extra), input)),
+      async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).updateMemory(userId, input)),
     );
   },
   {
@@ -145,15 +164,17 @@ const verifyToken = async (
 };
 
 const authHandler = withMcpAuth(handler, verifyToken, {
-  required: true,
+  required: false,
   requiredScopes: ["memory"],
-  resourceMetadataPath: "/.well-known/oauth-protected-resource",
+  resourceMetadataPath: "/.well-known/oauth-protected-resource/api/mcp",
 });
 
-/** ChatGPT scans initialize + tools/list before OAuth. Memory calls still require a token. */
+/** ChatGPT lists tools before OAuth. Memory calls still require a token. */
 async function mcpRoute(req: Request) {
-  if (await isPublicMcpHandshake(req)) return handler(req);
-  return authHandler(req);
+  return runMcpRequest(req, async () => {
+    if (await isPublicMcpHandshake(req)) return withChatGptToolList(await handler(req));
+    return withChatGptToolList(await authHandler(req));
+  });
 }
 
 export { mcpRoute as GET, mcpRoute as POST, mcpRoute as DELETE };
