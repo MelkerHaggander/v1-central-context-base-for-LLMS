@@ -126,4 +126,18 @@ describe("mock-store följer contracts.md", () => {
     assert.notEqual(u.updated_at, m.updated_at);
     assert.equal(ok(db.searchMemory(A, {})).length, 1);
   });
+
+  it("tar category lesson och går att söka som Lärdom", () => {
+    const db = new MockMemoryStore();
+    const m = ok(
+      db.saveMemory(A, {
+        project: "Projekt A",
+        category: "lesson",
+        title: "Rätta category till gemener",
+        content: "Ogiltig category ska rättas till gemener.",
+      }),
+    );
+    assert.equal(m.category, "lesson");
+    assert.equal(ok(db.searchMemory(A, { category: "lesson" })).length, 1);
+  });
 });

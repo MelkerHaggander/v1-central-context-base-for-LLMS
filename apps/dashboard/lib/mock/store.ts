@@ -45,7 +45,7 @@ export function validateMemoryInput(input: MemoryInput) {
   if (!(CATEGORIES as readonly string[]).includes(category)) {
     return fail(
       "INVALID_CATEGORY",
-      "category måste vara fact, decision, goal, deadline eller preference.",
+      "category måste vara fact, decision, goal, deadline, preference eller lesson.",
     );
   }
   return { data: { project, category: category as Memory["category"], title, content } };
@@ -63,7 +63,7 @@ export function validateSearchInput(input: SearchInput) {
   if (category && !(CATEGORIES as readonly string[]).includes(category)) {
     return fail(
       "INVALID_CATEGORY",
-      "category måste vara fact, decision, goal, deadline eller preference.",
+      "category måste vara fact, decision, goal, deadline, preference eller lesson.",
     );
   }
   if (!Number.isInteger(offset) || offset < 0) {

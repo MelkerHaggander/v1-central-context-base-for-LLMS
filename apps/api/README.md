@@ -36,10 +36,11 @@ Samma Vercel-projekt (Root Directory `apps/api`) visar Filips UI och Alfredos AP
 | GET | `/api/auth/session` | `data` eller `null` |
 | POST | `/api/auth/logout` | `{ data: { success: true } }` |
 | POST | `/api/memories` och `/api/mcp/save_memory` | `save_memory` |
+| POST | `/api/mcp/lesson_memory` | `lesson_memory` (alltid `category` `lesson`) |
 | GET | `/api/memories` och POST `/api/mcp/search_memory` | `search_memory` |
 | PATCH | `/api/memories/:id` och POST `/api/mcp/update_memory` | `update_memory` |
 | DELETE | `/api/memories/:id` | Radera eget minne. Cookie-session. **Inte** MCP. |
-| GET | `/api/mcp` (Claude) | Fjärr-MCP, tre verktyg, OAuth. Token går inte ut. |
+| GET | `/api/mcp` (Claude) | Fjärr-MCP, fyra verktyg, OAuth. Token går inte ut. |
 | GET | `/oauth/authorize` | Filips OAuth-vy. Postar till `/oauth/approve` |
 
 ## Du måste leverera (annars är backend/MCP inte klar)
@@ -68,13 +69,14 @@ Session ska fungera från **olika datorer** (test 2 på måndag).
 
 ### 4. Fjärr-MCP på Vercel
 
-Tre verktyg, inga fler:
+Fyra verktyg, inga fler:
 
 | Verktyg | In |
 | --- | --- |
-| `save_memory` | `project`, `category`, `title`, `content` |
-| `search_memory` | `project?`, `category?`, `query?`, `offset?` |
-| `update_memory` | `id`, `project`, `category`, `title`, `content` |
+| `save_memory` | `project`, `category` (`fact`/`decision`/`goal`/`deadline`/`preference`), `title`, `content` |
+| `search_memory` | `project?`, `category?` (även `lesson`), `query?`, `offset?` |
+| `update_memory` | `id`, `project`, `category` (även `lesson`), `title`, `content` |
+| `lesson_memory` | `project`, `title`, `content` — servern sätter `category` `lesson` |
 
 - Ägare = OAuth/inloggning, **aldrig** ett user-id Claude skickar.
 - `save_memory` sätter `id` (UUID), `created_at`, `updated_at`.

@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 import { MEMORY_INSTRUCTIONS, MCP_SERVER_INFO } from "../lib/mcp-instructions";
 
 describe("MCP-instruktioner V1.1", () => {
-  it("nämner de tre verktygen i singular", () => {
-    for (const tool of ["search_memory", "save_memory", "update_memory"]) {
+  it("nämner de fyra verktygen i singular", () => {
+    for (const tool of ["search_memory", "save_memory", "update_memory", "lesson_memory"]) {
       assert.ok(MEMORY_INSTRUCTIONS.includes(tool), tool);
     }
+    assert.match(MEMORY_INSTRUCTIONS, /There is no tool named lesson-memory/);
   });
 
   it("förbjuder påhittat user_id och lögn om sparat", () => {
@@ -17,6 +18,14 @@ describe("MCP-instruktioner V1.1", () => {
   it("förbjuder radering via MCP", () => {
     assert.match(MEMORY_INSTRUCTIONS, /Never delete memories/);
     assert.match(MEMORY_INSTRUCTIONS, /no delete_memory tool/);
+  });
+
+  it("låser när lesson_memory får anropas", () => {
+    assert.match(MEMORY_INSTRUCTIONS, /HARD RULES for lesson_memory/);
+    assert.match(MEMORY_INSTRUCTIONS, /Call lesson_memory only when ALL of these are true/);
+    assert.match(MEMORY_INSTRUCTIONS, /never lesson_memory/);
+    assert.match(MEMORY_INSTRUCTIONS, /Do not send category/);
+    assert.match(MEMORY_INSTRUCTIONS, /Never call lesson_memory when/);
   });
 
   it("serverinfo är 1.1", () => {

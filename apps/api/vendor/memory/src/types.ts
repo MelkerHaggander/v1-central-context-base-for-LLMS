@@ -4,6 +4,7 @@ export const CATEGORIES = [
   "goal",
   "deadline",
   "preference",
+  "lesson",
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];

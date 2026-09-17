@@ -33,6 +33,9 @@ const WRITE_TOOL = {
   idempotentHint: false,
 } as const;
 
+const SAVE_CATEGORIES = ["fact", "decision", "goal", "deadline", "preference"] as const;
+const ALL_CATEGORIES = ["fact", "decision", "goal", "deadline", "preference", "lesson"] as const;
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -100,7 +103,7 @@ const handler = createMcpHandler(
       "Spara ett minne för den inloggade användaren. Use this when the user confirms a fact, decision, goal, deadline or preference that should persist across chats.",
       {
         project: z.string().min(1).max(100),
-        category: z.enum(["fact", "decision", "goal", "deadline", "preference"]),
+        category: z.enum(SAVE_CATEGORIES),
         title: z.string().min(1).max(150),
         content: z.string().min(1).max(10_000),
       },
@@ -110,10 +113,10 @@ const handler = createMcpHandler(
 
     server.tool(
       "search_memory",
-      "Sök den inloggade användarens minnen. Tom lista är giltig. Use this before answering questions that may depend on saved project context.",
+      "Sök den inloggade användarens minnen. Tom lista är giltig. Use this before answering questions that may depend on saved project context. Pass category lesson when looking for lessons.",
       {
         project: z.string().max(100).optional(),
-        category: z.enum(["fact", "decision", "goal", "deadline", "preference"]).optional(),
+        category: z.enum(ALL_CATEGORIES).optional(),
         query: z.string().optional(),
         offset: z.number().int().min(0).optional(),
       },
@@ -127,12 +130,25 @@ const handler = createMcpHandler(
       {
         id: z.string().uuid(),
         project: z.string().min(1).max(100),
-        category: z.enum(["fact", "decision", "goal", "deadline", "preference"]),
+        category: z.enum(ALL_CATEGORIES),
         title: z.string().min(1).max(150),
         content: z.string().min(1).max(10_000),
       },
       WRITE_TOOL,
       async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).updateMemory(userId, input)),
+    );
+
+    server.tool(
+      "lesson_memory",
+      "Spara en lärdom från DENNA chatt. Call only when ALL hard rules in the server instructions are true: search_memory already ran this turn; the chat produced a reusable lesson (correction, working method, mistake never to repeat, or a user rule for future work); the user confirmed it or said it applies from now on; it is not a one-off answer; it is not a fact/decision/goal/deadline/preference (those use save_memory); it is not a duplicate. Do not send category. The server stores category lesson.",
+      {
+        project: z.string().min(1).max(100),
+        title: z.string().min(1).max(150),
+        content: z.string().min(1).max(10_000),
+      },
+      WRITE_TOOL,
+      async (input, extra) =>
+        runMemoryTool(extra, (userId) => memoryApi(extra).saveLesson(userId, input)),
     );
   },
   {

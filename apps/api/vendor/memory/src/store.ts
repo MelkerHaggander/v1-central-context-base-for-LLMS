@@ -146,5 +146,9 @@ export function createMemoryApi(store: MemoryStore) {
     updateMemory: (userId: string, input: MemoryInput & { id: string }) =>
       updateMemory(userId, input, store),
     deleteMemory: (userId: string, id: string) => deleteMemory(userId, id, store),
+    saveLesson: (
+      userId: string,
+      input: { project: string; title: string; content: string },
+    ) => saveMemory(userId, { ...input, category: "lesson" }, store),
   };
 }

@@ -14,7 +14,7 @@ Databasen lagrar dessutom `user_id`. `user_id` returneras aldrig i svar till kli
 | --- | --- | --- |
 | `id` | Unikt UUID som text | Backend |
 | `project` | Text, 1–100 tecken | Claude |
-| `category` | Endast `fact`, `decision`, `goal`, `deadline` eller `preference` | Claude |
+| `category` | Endast `fact`, `decision`, `goal`, `deadline`, `preference` eller `lesson` | Claude |
 | `title` | Text, 1–150 tecken | Claude |
 | `content` | Text, 1–10 000 tecken | Claude |
 | `created_at` | UTC, exakt `YYYY-MM-DDTHH:MM:SSZ`. Millisekunder utelämnas | Backend |
@@ -29,6 +29,7 @@ Kategorietiketter i dashboarden (svenska):
 | `goal` | Mål |
 | `deadline` | Deadline |
 | `preference` | Preferens |
+| `lesson` | Lärdom |
 
 ### Exempel (svar utan `user_id`)
 
@@ -71,6 +72,7 @@ Argumentnamn och betydelse är låsta. Behörighet: alltid den inloggade använd
 ### `save_memory`
 
 In: `{ "project": string, "category": string, "title": string, "content": string }`  
+`category` här är bara `fact`, `decision`, `goal`, `deadline` eller `preference`. Lärdomar går via `lesson_memory`.  
 Ut vid lycka: ett minnesobjekt som ovan.  
 Ut vid fel: `{ "error": { "code": string, "message": string } }` — får **aldrig** se ut som lyckad sparning.
 
@@ -92,9 +94,18 @@ In: `{ "id": string, "project": string, "category": string, "title": string, "co
 Ut vid lycka: uppdaterat minnesobjekt (`updated_at` nytt, `id` samma).  
 Ut vid fel (finns inte, tillhör annan användare, ogiltiga fält): error-objekt, aldrig ett “lyckat” minne.
 
-`id` måste vara ett UUID. Alla fält krävs, partiell uppdatering finns inte. `updated_at` sätts alltid om, även när inget fält faktiskt ändrats, och raden hamnar då först i sökresultatet.
+`id` måste vara ett UUID. Alla fält krävs, partiell uppdatering finns inte. `updated_at` sätts alltid om, även när inget fält faktiskt ändrats, och raden hamnar då först i sökresultatet. `category` får vara `lesson` när en befintlig lärdom ska ändras.
 
 Om raden inte finns, och om den tillhör ett annat konto, returneras **samma** fel med samma kod och samma text. Felet får inte avslöja om ett `id` existerar.
+
+### `lesson_memory`
+
+In: `{ "project": string, "title": string, "content": string }`  
+Inget `category`. Servern sätter alltid `category`: `lesson`.  
+Ut vid lycka: ett minnesobjekt som ovan, med `category` `lesson`.  
+Ut vid fel: samma error-objekt som `save_memory`.
+
+Används bara för en återanvändbar lärdom från **denna** chatt (rättelse, metod som fungerade, misstag att inte upprepa, eller en regel användaren satte). Fakta, beslut, mål, deadlines och preferenser ska använda `save_memory`. Identisk omsparning beter sig som `save_memory`.
 
 ### Dashboard-HTTP: radera (inte MCP)
 
@@ -119,7 +130,7 @@ TypeScript-funktioner som både dashboard-API och MCP anropar efter ihopkoppling
 - radera via `id` (dashboard-HTTP, inte MCP)
 - söka (`query`, `project`, `category`, `offset`) med senast uppdaterat först
 
-Exporterade namn: `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`, `saveMemory`, `searchMemory`, `updateMemory`, `deleteMemory`. Det är `searchMemory` i singular, inte `searchMemories`.
+Exporterade namn: `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`, `saveMemory`, `searchMemory`, `updateMemory`, `deleteMemory`. `createMemoryApi` har dessutom `saveLesson` (samma som `saveMemory` med `category` `lesson`). Det är `searchMemory` i singular, inte `searchMemories`.
 
 De tre huvudfunktionerna tar `user_id` som första argument, hämtat ur anroparens session. Modulen tar aldrig emot `user_id` från verktygsindata och kontrollerar det aldrig mot Claudes inskickade värden, eftersom sådana inte finns.
 

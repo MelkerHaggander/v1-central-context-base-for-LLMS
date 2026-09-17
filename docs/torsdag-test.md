@@ -179,7 +179,7 @@ await api.saveMemory(userId, input);
 **Förberedelse:** Räkna rader för Konto A före testet (`GET /api/memories`).
 
 **Steg**
-1. HTTP `POST /api/memories` som Konto A med `category`: `nope`, övriga fält som Lanseringsdatum. Förväntat: `{ "error": { "code": "INVALID_CATEGORY", "message": "category måste vara fact, decision, goal, deadline eller preference." } }`. Status 400. Ingen ny rad.
+1. HTTP `POST /api/memories` som Konto A med `category`: `nope`, övriga fält som Lanseringsdatum. Förväntat: `{ "error": { "code": "INVALID_CATEGORY", "message": "category måste vara fact, decision, goal, deadline, preference eller lesson." } }`. Status 400. Ingen ny rad.
 2. HTTP `POST` med `category`: `Deadline` (versalt). Samma fel. Ingen rad. Exakt match krävs.
 3. I Claude: be den spara med category `anteckning` eller `Faktum`. Verktyget skall felas (schema eller `INVALID_CATEGORY`).
 4. Läs vad Claude **skriver** till användaren. Den skall säga att det inte sparades. Inte "sparat", "klart", "ligger i databasen".

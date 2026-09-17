@@ -25,7 +25,7 @@ export function validateMemoryInput(input: MemoryInput) {
   if (!CATEGORIES.includes(category as (typeof CATEGORIES)[number])) {
     return fail(
       "INVALID_CATEGORY",
-      "category måste vara fact, decision, goal, deadline eller preference.",
+      "category måste vara fact, decision, goal, deadline, preference eller lesson.",
     );
   }
 
@@ -51,7 +51,7 @@ export function validateSearchInput(input: SearchInput) {
   if (category && !CATEGORIES.includes(category as (typeof CATEGORIES)[number])) {
     return fail(
       "INVALID_CATEGORY",
-      "category måste vara fact, decision, goal, deadline eller preference.",
+      "category måste vara fact, decision, goal, deadline, preference eller lesson.",
     );
   }
   if (!Number.isInteger(offset) || offset < 0) {
