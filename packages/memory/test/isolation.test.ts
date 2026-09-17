@@ -65,3 +65,38 @@ test("owner can delete own memory", async () => {
   assert.ok("data" in after);
   assert.deepEqual(after.data, []);
 });
+
+test("saveLesson stores category lesson and isolates accounts", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  const saved = await memory.saveLesson(USER_A, {
+    project: "Projekt A",
+    title: "Rätta category till gemener",
+    content: "Ogiltig category ska rättas till gemener, inte sparas som svensk etikett.",
+  });
+  assert.ok("data" in saved);
+  assert.equal(saved.data.category, "lesson");
+  const found = await memory.searchMemory(USER_A, { category: "lesson" });
+  assert.ok("data" in found);
+  assert.equal(found.data.length, 1);
+  const other = await memory.searchMemory(USER_B, { category: "lesson" });
+  assert.ok("data" in other);
+  assert.deepEqual(other.data, []);
+});
+
+test("saveLesson de-duplicates identical lessons and is not stored as fact", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  const input = {
+    project: "Projekt A",
+    title: "Rätta category till gemener",
+    content: "Ogiltig category ska rättas till gemener, inte sparas som svensk etikett.",
+  };
+  const first = await memory.saveLesson(USER_A, input);
+  const second = await memory.saveLesson(USER_A, input);
+  assert.ok("data" in first && "data" in second);
+  assert.equal(first.data.category, "lesson");
+  assert.equal(second.data.id, first.data.id);
+  assert.equal(second.data.updated_at, first.data.updated_at);
+  const facts = await memory.searchMemory(USER_A, { category: "fact" });
+  assert.ok("data" in facts);
+  assert.deepEqual(facts.data, []);
+});

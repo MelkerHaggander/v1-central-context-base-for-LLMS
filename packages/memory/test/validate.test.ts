@@ -24,6 +24,23 @@ test("accepts Lanseringsdatum", () => {
   assert.equal(result.data.category, "deadline");
 });
 
+test("accepts lesson category", () => {
+  const result = validateMemoryInput({
+    project: "Projekt A",
+    category: "lesson",
+    title: "Rätta category till gemener",
+    content: "Ogiltig category ska rättas till gemener.",
+  });
+  assert.ok("data" in result);
+  assert.equal(result.data.category, "lesson");
+});
+
+test("search accepts category lesson", () => {
+  const result = validateSearchInput({ category: "lesson" });
+  assert.ok("data" in result);
+  assert.equal(result.data.category, "lesson");
+});
+
 test("search miss query is still valid", () => {
   const result = validateSearchInput({ query: "finns-inte-xyz" });
   assert.ok("data" in result);

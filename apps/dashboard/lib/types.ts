@@ -2,7 +2,7 @@
  * Låst V1-kontrakt. Speglar docs/contracts.md. Ändra inte utan överenskommelse.
  */
 
-export const CATEGORIES = ["fact", "decision", "goal", "deadline", "preference"] as const;
+export const CATEGORIES = ["fact", "decision", "goal", "deadline", "preference", "lesson"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 /** Svenska etiketter i dashboarden. Värdena mot API:t är alltid engelska gemener. */
@@ -12,6 +12,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   goal: "Mål",
   deadline: "Deadline",
   preference: "Preferens",
+  lesson: "Lärdom",
 };
 
 export function isCategory(value: unknown): value is Category {

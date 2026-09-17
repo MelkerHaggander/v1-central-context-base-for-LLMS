@@ -10,6 +10,7 @@ describe("MCP har inget radera-verktyg", () => {
     assert.equal(src.includes("'delete_memory'"), false);
     assert.ok(src.includes('"save_memory"'));
     assert.ok(src.includes('"update_memory"'));
+    assert.ok(src.includes('"lesson_memory"'));
   });
 
   it("det finns ingen /api/mcp/delete_memory-rutt", () => {

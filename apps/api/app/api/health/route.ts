@@ -15,5 +15,6 @@ export function GET() {
     chatgpt: "mixed-auth",
     grok: "oauth-first",
     mcpAuth: "lifetime",
+    lessonMemory: true,
   });
 }

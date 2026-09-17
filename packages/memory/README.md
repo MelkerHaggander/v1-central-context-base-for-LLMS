@@ -64,6 +64,7 @@ Texten i [docs/claude-instruktioner.md](../../docs/claude-instruktioner.md) är 
 | --- | --- |
 | Hämta relevant projektminne före projektfrågor | `searchMemory` / `search_memory` |
 | Spara bekräftade fakta, beslut, mål, deadlines, preferenser | `saveMemory` / `save_memory` med rätt `category` |
+| Spara en lärdom från chatten | `saveLesson` / `lesson_memory` (alltid `category` `lesson`) |
 | Sök före sparning | Claude anropar `search_memory` först. Identisk `saveMemory` är ändå lycka och skapar inte en andra rad. |
 | Uppdatera befintligt ID vid tydlig ändring | `updateMemory` / `update_memory` |
 | Bekräfta sparning först efter lyckat verktygssvar | Visa inte “sparat” om svaret har `error` |
