@@ -20,12 +20,13 @@ describe("MCP-instruktioner V1.1", () => {
     assert.match(MEMORY_INSTRUCTIONS, /no delete_memory tool/);
   });
 
-  it("låser när lesson_memory får anropas", () => {
-    assert.match(MEMORY_INSTRUCTIONS, /HARD RULES for lesson_memory/);
-    assert.match(MEMORY_INSTRUCTIONS, /Call lesson_memory only when ALL of these are true/);
-    assert.match(MEMORY_INSTRUCTIONS, /never lesson_memory/);
-    assert.match(MEMORY_INSTRUCTIONS, /Do not send category/);
-    assert.match(MEMORY_INSTRUCTIONS, /Never call lesson_memory when/);
+  it("kräver proaktiv sök, sparning, uppdatering och lärdomar", () => {
+    assert.match(MEMORY_INSTRUCTIONS, /Use memory proactively and frequently/);
+    assert.match(MEMORY_INSTRUCTIONS, /SEARCH FIRST/);
+    assert.match(MEMORY_INSTRUCTIONS, /There is no create_memory/);
+    assert.match(MEMORY_INSTRUCTIONS, /Do not use lesson_memory for ordinary facts/);
+    assert.match(MEMORY_INSTRUCTIONS, /WHAT was learned/);
+    assert.match(MEMORY_INSTRUCTIONS, /Do not send category to lesson_memory/);
   });
 
   it("serverinfo är 1.1", () => {

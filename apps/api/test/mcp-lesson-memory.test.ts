@@ -30,9 +30,9 @@ describe("MCP-verktyget lesson_memory", () => {
     assert.equal(/category:\s*String\(body\.category/.test(httpSrc), false);
   });
 
-  it("instruktionerna kräver sök, bekräftelse och förbud mot fakta via lesson_memory", () => {
-    assert.match(MEMORY_INSTRUCTIONS, /You already called search_memory in this turn/);
-    assert.match(MEMORY_INSTRUCTIONS, /Those must use save_memory, never lesson_memory/);
+  it("instruktionerna skiljer lärdom från vanliga fakta", () => {
+    assert.match(MEMORY_INSTRUCTIONS, /Do not use lesson_memory for ordinary facts/);
+    assert.match(MEMORY_INSTRUCTIONS, /WHAT was learned/);
     assert.match(MEMORY_INSTRUCTIONS, /The server stores category "lesson"/);
   });
 });

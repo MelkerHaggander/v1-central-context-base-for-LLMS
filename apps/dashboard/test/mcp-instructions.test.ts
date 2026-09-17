@@ -7,8 +7,10 @@ describe("MCP-instruktioner V1.1", () => {
     for (const tool of ["search_memory", "save_memory", "update_memory", "lesson_memory"]) {
       assert.ok(MEMORY_INSTRUCTIONS.includes(tool), tool);
     }
-    assert.match(MEMORY_INSTRUCTIONS, /HARD RULES for lesson_memory/);
+    assert.match(MEMORY_INSTRUCTIONS, /Use memory proactively and frequently/);
     assert.match(MEMORY_INSTRUCTIONS, /There is no tool named lesson-memory/);
+    assert.match(MEMORY_INSTRUCTIONS, /There is no create_memory/);
+    assert.match(MEMORY_INSTRUCTIONS, /Do not use lesson_memory for ordinary facts/);
   });
 
   it("förbjuder påhittat user_id och lögn om sparat", () => {
