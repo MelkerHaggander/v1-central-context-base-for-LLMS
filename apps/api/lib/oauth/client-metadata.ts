@@ -6,6 +6,7 @@ const FETCH_TIMEOUT_MS = 5_000;
 
 const ALLOWED_HOSTS = new Set([
   "claude.ai",
+  "claude.com",
   "anthropic.com",
   "openai.com",
   "chatgpt.com",
@@ -15,6 +16,7 @@ const ALLOWED_HOSTS = new Set([
 
 const ALLOWED_SUFFIXES = [
   ".claude.ai",
+  ".claude.com",
   ".anthropic.com",
   ".openai.com",
   ".chatgpt.com",
@@ -104,10 +106,11 @@ export async function fetchClientMetadata(
     const response = await fetchImpl(clientId, {
       headers: { accept: "application/json" },
       cache: "no-store",
-      redirect: "error",
+      redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return null;
+    if (!isAllowedClientMetadataUrl(response.url || clientId)) return null;
     const advertised = Number(response.headers.get("content-length") ?? "0");
     if (advertised > MAX_CLIENT_METADATA_BYTES) return null;
     const text = await response.text();

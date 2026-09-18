@@ -26,6 +26,11 @@ function tokenJson(issued: IssuedTokens, resource?: string) {
 }
 
 async function readParams(request: Request) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const json = await request.json().catch(() => null);
+    return (json ?? {}) as Record<string, string>;
+  }
   const form = await request.formData().catch(() => null);
   if (form) return Object.fromEntries(form.entries()) as Record<string, string>;
   const json = await request.json().catch(() => null);

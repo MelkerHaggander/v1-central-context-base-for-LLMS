@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { SessionGate } from "@/components/SessionGate";
 import { TopBar } from "@/components/TopBar";
-import { CopyButton, ErrorText } from "@/components/ui";
+import { CopyButton } from "@/components/ui";
+import { visibleMcpUrl } from "@/lib/mcp-url";
 
 export function ConnectView({ url }: { url: string }) {
-  const [resolvedUrl, setResolvedUrl] = useState(url);
-
-  useEffect(() => {
-    if (!url) setResolvedUrl(`${window.location.origin}/api/mcp`);
-  }, [url]);
+  const resolvedUrl = visibleMcpUrl(url);
 
   return (
     <SessionGate>
@@ -31,16 +27,15 @@ export function ConnectView({ url }: { url: string }) {
               </Step>
 
               <Step n={2} title="Kopiera MCP-adressen">
-                {resolvedUrl ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <code className="flex-1 break-all rounded-md border border-line bg-background px-3 py-2 text-sm">
-                      {resolvedUrl}
-                    </code>
-                    <CopyButton text={resolvedUrl} />
-                  </div>
-                ) : (
-                  <ErrorText message="MCP-adressen saknas. Öppna sidan på Vercel-adressen, eller sätt NEXT_PUBLIC_MCP_URL." />
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="flex-1 break-all rounded-md border border-line bg-background px-3 py-2 text-sm">
+                    {resolvedUrl}
+                  </code>
+                  <CopyButton text={resolvedUrl} />
+                </div>
+                <p className="mt-2 text-sm text-muted">
+                  Samma adress efter varje uppdatering. Klistra inte in en unik Vercel-länk.
+                </p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
                   <li>
                     Claude Desktop: Settings → Connectors → Add custom connector. Fjärranslutning
@@ -62,20 +57,12 @@ export function ConnectView({ url }: { url: string }) {
                   <li>
                     Kimi Code:{" "}
                     <code className="text-xs">
-                      kimi mcp add --transport http --auth oauth central-memory {resolvedUrl || "https://DIN-DOMÄN/api/mcp"}
+                      kimi mcp add --transport http --auth oauth central-memory {resolvedUrl}
                     </code>
                     {" "}sedan{" "}
                     <code className="text-xs">kimi mcp auth central-memory</code>.
                   </li>
                 </ul>
-                {isVercelPreviewMcp(resolvedUrl) ? (
-                  <p className="mt-2 text-sm text-red-700">
-                    ChatGPT kan inte använda den här preview-adressen. Vercel-inloggning stoppar
-                    ChatGPT:s servrar. Klistra in production-adressen till{" "}
-                    <code className="text-xs">/api/mcp</code>, inte en <code className="text-xs">-git-</code>{" "}
-                    preview.
-                  </p>
-                ) : null}
               </Step>
 
               <Step n={3} title="Godkänn åtkomst och börja chatta">
@@ -98,14 +85,6 @@ export function ConnectView({ url }: { url: string }) {
       )}
     </SessionGate>
   );
-}
-
-function isVercelPreviewMcp(url: string) {
-  try {
-    return new URL(url).hostname.includes("-git-");
-  } catch {
-    return false;
-  }
 }
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
