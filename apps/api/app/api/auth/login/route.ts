@@ -1,5 +1,5 @@
 import { jsonError, jsonOk } from "@/lib/http";
-import { createSupabaseAdminClient } from "@/lib/supabase/clients";
+import { createSupabaseUserClient } from "@/lib/supabase/clients";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -33,13 +33,13 @@ export async function POST(request: Request) {
 
   if (data.session?.access_token && data.session.refresh_token) {
     try {
-      await createSupabaseAdminClient().rpc("oauth_update_supabase_tokens_for_user", {
+      await createSupabaseUserClient(data.session.access_token).rpc("oauth_update_supabase_tokens_for_user", {
         p_user_id: data.user.id,
         p_supabase_access: data.session.access_token,
         p_supabase_refresh: data.session.refresh_token,
       });
     } catch {
-      // Cookie login must still succeed if service_role is missing.
+      // Cookie login must still succeed if MCP session update fails.
     }
   }
 

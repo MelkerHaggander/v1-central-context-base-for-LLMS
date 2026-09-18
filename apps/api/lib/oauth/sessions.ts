@@ -1,7 +1,7 @@
 import { randomToken } from "@/lib/oauth/crypto";
 import { asMcpSession, asReusedMcpTokens, type McpSession } from "@/lib/oauth/session-parse";
 import { accessTokenExpiresIn } from "@/lib/oauth/tokens";
-import { createSupabaseAdminClient, createSupabaseAnonClient } from "@/lib/supabase/clients";
+import { createSupabaseAnonClient, createSupabaseUserClient } from "@/lib/supabase/clients";
 
 export type { McpSession } from "@/lib/oauth/session-parse";
 export { asMcpSession } from "@/lib/oauth/session-parse";
@@ -38,7 +38,7 @@ export async function issueMcpTokens(input: {
 }): Promise<IssuedTokens> {
   const access_token = randomToken();
   const refresh_token = randomToken();
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseUserClient(input.supabaseAccess);
   const { error } = await supabase.rpc("oauth_create_session", {
     p_access: access_token,
     p_refresh: refresh_token,
@@ -58,7 +58,7 @@ export async function issueMcpTokens(input: {
 }
 
 export async function getMcpSession(accessToken: string): Promise<McpSession | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseAnonClient();
   const { data, error } = await supabase.rpc("oauth_get_session", { p_access: accessToken });
   if (error) return null;
   return asMcpSession(data);
@@ -89,7 +89,7 @@ export async function supabaseAccessForMcp(
   }
   const refreshed = await refreshSupabase(session.user_id, session.supabase_refresh);
   if (!refreshed) return session.supabase_access;
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseUserClient(refreshed.access);
   await supabase.rpc("oauth_update_supabase_tokens_for_user", {
     p_user_id: session.user_id,
     p_supabase_access: refreshed.access,
@@ -102,7 +102,7 @@ export async function rotateMcpRefresh(refreshToken: string): Promise<IssuedToke
   const existing = mcpRefreshInflight.get(refreshToken);
   if (existing) return existing;
   const pending = (async () => {
-    const supabase = createSupabaseAdminClient();
+    const supabase = createSupabaseAnonClient();
     const { data, error } = await supabase.rpc("oauth_reuse_session", {
       p_refresh: refreshToken,
     });

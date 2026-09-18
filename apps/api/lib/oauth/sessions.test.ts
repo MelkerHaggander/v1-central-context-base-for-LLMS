@@ -47,17 +47,18 @@ test("MCP token response expires_in does not overflow signed 32-bit unix time", 
   assert.equal(MCP_NEVER_EXPIRES_AT, "9999-12-31T00:00:00.000Z");
 });
 
-test("session RPCs use the service_role client, not the public anon key", () => {
+test("session create uses the signed-in user JWT, lookups use the opaque token", () => {
   const src = readFileSync(new URL("./sessions.ts", import.meta.url), "utf8");
-  assert.match(src, /createSupabaseAdminClient\(\);\n  const \{ error \} = await supabase\.rpc\("oauth_create_session"/);
-  assert.match(src, /createSupabaseAdminClient\(\);\n  const \{ data, error \} = await supabase\.rpc\("oauth_get_session"/);
-  assert.match(src, /createSupabaseAdminClient\(\);\n  await supabase\.rpc\("oauth_update_supabase_tokens_for_user"/);
-  assert.match(src, /createSupabaseAdminClient\(\);\n    const \{ data, error \} = await supabase\.rpc\("oauth_reuse_session"/);
-  assert.doesNotMatch(src, /createSupabaseAnonClient\(\);[\s\S]{0,120}rpc\("oauth_/);
+  assert.match(src, /createSupabaseUserClient\(input\.supabaseAccess\);\n  const \{ error \} = await supabase\.rpc\("oauth_create_session"/);
+  assert.match(src, /createSupabaseAnonClient\(\);\n  const \{ data, error \} = await supabase\.rpc\("oauth_get_session"/);
+  assert.match(src, /createSupabaseUserClient\(refreshed\.access\);\n  await supabase\.rpc\("oauth_update_supabase_tokens_for_user"/);
+  assert.match(src, /createSupabaseAnonClient\(\);\n    const \{ data, error \} = await supabase\.rpc\("oauth_reuse_session"/);
+  assert.doesNotMatch(src, /createSupabaseAdminClient/);
 });
 
-test("password login updates MCP tokens with service_role", () => {
+test("password login updates MCP tokens with the signed-in user JWT", () => {
   const src = readFileSync(new URL("../../app/api/auth/login/route.ts", import.meta.url), "utf8");
-  assert.match(src, /createSupabaseAdminClient\(\)\.rpc\("oauth_update_supabase_tokens_for_user"/);
+  assert.match(src, /createSupabaseUserClient\(data\.session\.access_token\)\.rpc\("oauth_update_supabase_tokens_for_user"/);
+  assert.doesNotMatch(src, /createSupabaseAdminClient/);
   assert.doesNotMatch(src, /createSupabaseAnonClient/);
 });
