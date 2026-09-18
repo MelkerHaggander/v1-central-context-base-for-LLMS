@@ -8,6 +8,7 @@ import {
 
 test("allows ChatGPT, Claude and Grok client metadata hosts", () => {
   assert.equal(isAllowedClientMetadataUrl("https://claude.ai/api/mcp/auth_callback"), true);
+  assert.equal(isAllowedClientMetadataUrl("https://claude.com/api/mcp/auth_callback"), true);
   assert.equal(isAllowedClientMetadataUrl("https://www.claude.ai/.well-known/oauth-client"), true);
   assert.equal(isAllowedClientMetadataUrl("https://chatgpt.com/connector.json"), true);
   assert.equal(isAllowedClientMetadataUrl("https://platform.openai.com/client.json"), true);
