@@ -8,9 +8,10 @@ const routeSrc = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8"
 const httpSrc = readFileSync(join(__dirname, "../app/api/mcp/lesson_memory/route.ts"), "utf8");
 
 describe("MCP-verktyget lesson_memory", () => {
-  it("finns som fjärde verktyg och anropar saveLesson", () => {
+  it("finns som femte verktyg och anropar saveLesson", () => {
     assert.match(routeSrc, /server\.tool\(\s*"lesson_memory"/);
     assert.match(routeSrc, /memoryApi\(extra\)\.saveLesson\(userId, input\)/);
+    assert.match(routeSrc, /get_context already ran this turn/);
   });
 
   it("save_memory tar inte category lesson", () => {

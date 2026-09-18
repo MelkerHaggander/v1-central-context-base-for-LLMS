@@ -16,5 +16,6 @@ export function GET() {
     grok: "oauth-first",
     mcpAuth: "lifetime",
     lessonMemory: true,
+    promptTransports: true,
   });
 }

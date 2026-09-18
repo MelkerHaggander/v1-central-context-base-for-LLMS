@@ -33,6 +33,26 @@ export type SearchInput = {
   offset?: number;
 };
 
+export type ContextInput = {
+  prompt: string;
+  project?: string;
+};
+
+export type ContextItem = {
+  id: string;
+  project: string;
+  category: Category;
+  title: string;
+  snippet: string;
+};
+
+export type ContextResult = {
+  keywords: string[];
+  project?: string;
+  items: ContextItem[];
+  omitted: number;
+};
+
 export type AppError = {
   error: { code: string; message: string };
 };
