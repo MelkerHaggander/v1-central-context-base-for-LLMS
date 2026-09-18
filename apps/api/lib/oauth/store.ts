@@ -1,4 +1,5 @@
 import { createSupabaseAnonClient, createSupabaseUserClient } from "@/lib/supabase/clients";
+import { fetchClientMetadata } from "./client-metadata";
 import { redirectAllowed as uriAllowed } from "./redirect";
 
 export type OAuthClient = {
@@ -16,23 +17,8 @@ export async function registerClient(redirectUris: string[]) {
 }
 
 export async function getClient(clientId: string): Promise<OAuthClient | null> {
-  if (clientId.startsWith("https://")) {
-    try {
-      const response = await fetch(clientId, {
-        headers: { accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!response.ok) return null;
-      const body = (await response.json()) as {
-        client_id?: string;
-        redirect_uris?: string[];
-      };
-      const uris = body.redirect_uris ?? [];
-      if (!Array.isArray(uris) || uris.length === 0) return null;
-      return { client_id: clientId, redirect_uris: uris };
-    } catch {
-      return null;
-    }
+  if (/^https?:\/\//i.test(clientId)) {
+    return fetchClientMetadata(clientId);
   }
 
   const supabase = createSupabaseAnonClient();

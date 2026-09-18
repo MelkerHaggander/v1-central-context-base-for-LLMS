@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { asMcpSession, asReusedMcpTokens } from "./session-parse";
 import { MCP_NEVER_EXPIRES_AT, mcpClientExpiresIn } from "./sessions";
@@ -44,4 +45,19 @@ test("MCP token response expires_in does not overflow signed 32-bit unix time", 
   assert.ok(now + expiresIn < 2_147_483_647);
   assert.ok(expiresIn > 300_000_000);
   assert.equal(MCP_NEVER_EXPIRES_AT, "9999-12-31T00:00:00.000Z");
+});
+
+test("session RPCs use the service_role client, not the public anon key", () => {
+  const src = readFileSync(new URL("./sessions.ts", import.meta.url), "utf8");
+  assert.match(src, /createSupabaseAdminClient\(\);\n  const \{ error \} = await supabase\.rpc\("oauth_create_session"/);
+  assert.match(src, /createSupabaseAdminClient\(\);\n  const \{ data, error \} = await supabase\.rpc\("oauth_get_session"/);
+  assert.match(src, /createSupabaseAdminClient\(\);\n  await supabase\.rpc\("oauth_update_supabase_tokens_for_user"/);
+  assert.match(src, /createSupabaseAdminClient\(\);\n    const \{ data, error \} = await supabase\.rpc\("oauth_reuse_session"/);
+  assert.doesNotMatch(src, /createSupabaseAnonClient\(\);[\s\S]{0,120}rpc\("oauth_/);
+});
+
+test("password login updates MCP tokens with service_role", () => {
+  const src = readFileSync(new URL("../../app/api/auth/login/route.ts", import.meta.url), "utf8");
+  assert.match(src, /createSupabaseAdminClient\(\)\.rpc\("oauth_update_supabase_tokens_for_user"/);
+  assert.doesNotMatch(src, /createSupabaseAnonClient/);
 });
