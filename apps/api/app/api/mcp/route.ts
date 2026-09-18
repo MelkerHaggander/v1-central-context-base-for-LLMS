@@ -112,8 +112,20 @@ const handler = createMcpHandler(
     );
 
     server.tool(
+      "get_context",
+      "Call this exactly once before answering whenever saved context may help. Send the user's full prompt unchanged; this tool extracts keywords, ranks memories and returns a compact context payload.",
+      {
+        prompt: z.string().min(1).max(8000),
+        project: z.string().max(100).optional(),
+      },
+      READ_TOOL,
+      async (input, extra) =>
+        runMemoryTool(extra, (userId) => memoryApi(extra).getContext(userId, input)),
+    );
+
+    server.tool(
       "search_memory",
-      "Sök den inloggade användarens minnen. Tom lista är giltig. Use this before answering questions that may depend on saved project context. Pass category lesson when looking for lessons.",
+      "Legacy tool. Do not use; call get_context with the full user prompt.",
       {
         project: z.string().max(100).optional(),
         category: z.enum(ALL_CATEGORIES).optional(),
@@ -140,7 +152,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "lesson_memory",
-      "Spara en lärdom från DENNA chatt. Call only when ALL hard rules in the server instructions are true: search_memory already ran this turn; the chat produced a reusable lesson (correction, working method, mistake never to repeat, or a user rule for future work); the user confirmed it or said it applies from now on; it is not a one-off answer; it is not a fact/decision/goal/deadline/preference (those use save_memory); it is not a duplicate. Do not send category. The server stores category lesson.",
+      "Spara en lärdom från DENNA chatt. Call only when ALL hard rules in the server instructions are true: get_context already ran this turn; the chat produced a reusable lesson (correction, working method, mistake never to repeat, or a user rule for future work); the user confirmed it or said it applies from now on; it is not a one-off answer; it is not a fact/decision/goal/deadline/preference (those use save_memory); it is not a duplicate. Do not send category. The server stores category lesson.",
       {
         project: z.string().min(1).max(100),
         title: z.string().min(1).max(150),

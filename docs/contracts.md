@@ -78,11 +78,41 @@ Ut vid fel: `{ "error": { "code": string, "message": string } }` — får **aldr
 
 Identisk omsparning, alltså samma konto plus samma `project`, `category`, `title` och `content`, skapar ingen ny rad. Den returnerar befintlig rad som **lyckat** svar, med oförändrat `id` och oförändrat `updated_at`. Det är inte ett fel.
 
+### `get_context`
+
+In: `{ "prompt": string, "project"?: string }`
+`prompt` måste vara hela användarens meddelande, 1–8 000 tecken. LLM:en skickar inte `keywords`, `query`, `category` eller `offset`. Högst ett anrop görs före svaret; servern extraherar nyckelord och rankar.
+
+Ut:
+
+```json
+{
+  "keywords": ["lansera", "projektet"],
+  "project": "Projekt A",
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "project": "Projekt A",
+      "category": "deadline",
+      "title": "Lanseringsdatum",
+      "snippet": "Vi lanserar 15 oktober 2026."
+    }
+  ],
+  "omitted": 0
+}
+```
+
+Tom `items` är giltig. Varje träff innehåller bara `id`, `project`, `category`, `title` och `snippet`; aldrig `user_id`, tidsstämplar eller fullt `content`. Högst 8 träffar returneras, varje `snippet` är högst 280 tecken och hela JSON-svaret är högst 3 500 tecken. `omitted` räknar relevanta träffar som inte fick plats.
+
+Rankningen prioriterar titelträff över innehållsträff, därefter täckning av unika nyckelord, kategori-ledtrådar i prompten och senast uppdaterat som skiljeregel. Träffar med poäng 0 tas bort. `project` filtreras exakt och skiftlägeskänsligt. Ogiltig eller tom prompt ger `INVALID_PROMPT`; lagringsfel ger `SEARCH_FAILED`.
+
 ### `search_memory`
 
 In: `{ "project"?: string, "category"?: string, "query"?: string, "offset"?: number }`  
 Ut: lista av minnesobjekt, `updated_at` fallande. Tom lista är giltig, inte fel.  
 `query` söker i `title` och `content`.
+
+Detta verktyg är kvar för bakåtkompatibilitet men LLM-klienter ska inte använda det. De ska anropa `get_context` med hela användarprompten.
 
 Högst **50** minnen per anrop. `offset` hoppar över rader i samma sortering, så nästa sida hämtas med `offset: 50`. `offset` måste vara ett heltal 0 eller högre.
 
@@ -129,8 +159,9 @@ TypeScript-funktioner som både dashboard-API och MCP anropar efter ihopkoppling
 - uppdatera via `id`
 - radera via `id` (dashboard-HTTP, inte MCP)
 - söka (`query`, `project`, `category`, `offset`) med senast uppdaterat först
+- extrahera nyckelord och hämta rankad, budgeterad kontext från hela prompten
 
-Exporterade namn: `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`, `saveMemory`, `searchMemory`, `updateMemory`, `deleteMemory`. `createMemoryApi` har dessutom `saveLesson` (samma som `saveMemory` med `category` `lesson`). Det är `searchMemory` i singular, inte `searchMemories`.
+Exporterade namn: `validateMemoryInput`, `validateSearchInput`, `validateMemoryId`, `extractKeywords`, `saveMemory`, `searchMemory`, `getContext`, `updateMemory`, `deleteMemory`. `createMemoryApi` har dessutom `saveLesson` (samma som `saveMemory` med `category` `lesson`). Det är `searchMemory` i singular, inte `searchMemories`.
 
 De tre huvudfunktionerna tar `user_id` som första argument, hämtat ur anroparens session. Modulen tar aldrig emot `user_id` från verktygsindata och kontrollerar det aldrig mot Claudes inskickade värden, eftersom sådana inte finns.
 

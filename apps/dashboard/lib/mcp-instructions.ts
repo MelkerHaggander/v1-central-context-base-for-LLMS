@@ -5,7 +5,8 @@
 export const MEMORY_INSTRUCTIONS = `This MCP is the persistent memory layer for the user.
 
 Tools, and only these:
-- search_memory: retrieve existing memories
+- get_context: retrieve ranked, compact memories from the full user prompt
+- search_memory: legacy compatibility only; do not use it
 - save_memory: create a new memory (facts, decisions, goals, deadlines, preferences)
 - update_memory: change an existing memory by id
 - lesson_memory: store a reusable lesson that should influence future work
@@ -25,15 +26,23 @@ continuity, personalization, or prevent the user from repeating information.
 DEFAULT BEHAVIOR
 
 1. SEARCH FIRST
-Before answering, use search_memory whenever the request could depend on
+Before answering, call get_context whenever the request could depend on
 information from previous conversations, projects, decisions, preferences,
 people, plans, deadlines, technical choices, previous work, or ongoing tasks.
 
-If there is a reasonable possibility that relevant memory exists, search.
+Call it exactly once with:
+{ prompt: <the user's complete message>, project?: <exact project name> }
 
-Do not ask the user to repeat information before searching memory.
+Pass the complete user message unchanged in prompt. Do not extract keywords,
+invent a query, send category or offset, or make multiple searches. The tool
+extracts keywords, applies category cues, ranks matches and enforces the
+response budget.
 
-Call search_memory before answering whenever previous information could
+Do not use search_memory. It remains registered only for legacy compatibility.
+
+Do not ask the user to repeat information before calling get_context.
+
+Call get_context before answering whenever previous information could
 reasonably improve the response, including ongoing projects, previous
 decisions, preferences, technical architecture, people, deadlines, plans,
 prior attempts, constraints, terminology, or earlier discussions.
@@ -45,17 +54,12 @@ Also search when the user refers to something indirectly, such as:
 If relevant information might exist in memory, search rather than assuming
 it does not exist.
 
-Queries should describe the information needed semantically rather than
-relying only on exact keywords.
-
-Multiple searches may be used when the request depends on different kinds
-of context.
+When get_context returns items, use those items as context. Never invent,
+reconstruct or claim memories that were not returned.
 
 Do not search memory when the answer clearly depends only on information
 already available in the current conversation or on general knowledge
 unrelated to the user.
-
-When searching for lessons, call search_memory with category "lesson".
 
 2. WRITE AFTER LEARNING
 During and after conversations, identify new durable information that may
@@ -89,7 +93,8 @@ future value, unsupported assumptions, or duplicate memories.
 Do not save passwords, secrets, tokens, keys, small talk, uncertain claims
 or the model's own unused suggestions as confirmed information.
 
-When uncertain whether the information is new, search_memory first.
+When uncertain whether the information is new, call get_context first with
+the complete user message.
 
 3. KEEP MEMORY CURRENT
 Prefer updating an existing memory over creating a duplicate.
@@ -115,7 +120,7 @@ Never silently treat contradictory information as simultaneously current.
 Distinguish facts from hypotheses, ideas, and unresolved questions. Do not
 store speculation as confirmed fact.
 
-When necessary, use search_memory first to locate the existing memory.
+When necessary, use get_context first to locate the existing memory.
 
 Preserve useful historical context when it matters, but make the current
 state unambiguous.
