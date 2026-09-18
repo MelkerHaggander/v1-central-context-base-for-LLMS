@@ -6,17 +6,17 @@ TypeScript. **Vercel** + **Supabase** (Stockholm). Ingen Python, worker, kö, Cr
 
 Hur man loggar in och kopplar Claude står i Confluence, inte här.
 
-## Live — gren `integration/v1`
+## Live — gren `integration/v1.1`
 
 Ett Vercel-projekt. Root Directory är `apps/api`. Inte `main` (404). Inte ett andra projekt. Inte Root Directory `apps/dashboard`.
 
 | Vad | Adress |
 | --- | --- |
-| Dashboard | https://v1-central-context-base-for-llms-ausd5rwta.vercel.app |
-| MCP | `https://v1-central-context-bas-git-7f4021-barrettaalfredo-hues-projects.vercel.app/api/mcp` |
+| Dashboard | https://v1-central-context-base-for-llms.vercel.app |
+| MCP | `https://v1-central-context-base-for-llms.vercel.app/api/mcp` |
 | Vercel | https://vercel.com/barrettaalfredo-hues-projects/v1-central-context-base-for-llms |
 
-MCP-adressen sitter på branchen `cursor/mcp-forever-d243`. Den branchen tas inte bort.
+MCP-adressen är production-aliaset. Den byts **inte** när ni mergar till `integration/v1.1`. Klistra inte in unika `-git-` eller hash-URL:er.
 
 `main` rörs inte förrän [docs/torsdag-test.md](docs/torsdag-test.md) är grön.
 
@@ -34,7 +34,7 @@ Claude Desktop  ↔  fjärr-MCP (Vercel)  ↔  @v1/memory  ↔  Supabase
                                      Dashboarden läser samma rader
 ```
 
-Daglig kod: `alfredo/integrations`, `filip/dashboard`, `melker/memory`. Ihopkoppling: `integration/v1`.
+Daglig kod: `alfredo/integrations`, `filip/dashboard`, `melker/memory`. Ihopkoppling: `integration/v1.1`.
 
 ## Kontrakt
 

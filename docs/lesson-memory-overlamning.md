@@ -32,7 +32,7 @@ Databasregeln `memories_category_check` tillåter `lesson` (redan applicerad på
 
 ## Så kan ni testa
 
-Testmiljö: Vercel-preview för `cursor/lesson-memory-tool-544c` eller, efter merge, `integration/v1.1`. MCP-sökväg: `/api/mcp`. Inte `main`. Inte den gamla v1-hashen `git-7f4021`.
+Testmiljö: production-aliaset `https://v1-central-context-base-for-llms.vercel.app/api/mcp` efter merge till `integration/v1.1`. Inte `main`. Inte en unik `-git-` eller hash-URL.
 
 1. Öppna `GET /api/health`. Förväntat: `"mcp":"1.1.0"` och `"lessonMemory":true`.
 2. Anslut Claude, ChatGPT eller Grok till samma MCP-adress som tidigare, plus `/api/mcp`. Starta om klienten så nya instruktioner hämtas.
@@ -57,7 +57,7 @@ Inte testat: att Claude, ChatGPT och Grok följer de nya instruktionerna i en ri
 
 Instruktioner är råd till modellen. Servern tvingar bara kategori och verktygsnamn, inte att sök körs först.
 
-Samma MCP-sökväg `/api/mcp`. Klistra inte om URL efter varje merge till `integration/v1.1`. Starta om klienten så instruktionerna laddas om. Unika hash-URL:er (`…gczsl799b…`) byts vid nästa deploy.
+Samma MCP-adress `https://v1-central-context-base-for-llms.vercel.app/api/mcp`. Klistra inte om URL efter merge till `integration/v1.1`. Starta om klienten så instruktionerna laddas om. Unika hash-URL:er (`…gczsl799b…` eller `-git-`) byts vid nästa deploy och ska inte in i dokumentet.
 
 Filip kan filtrera `category=lesson`. Ingen ny radera-knapp ingår här.
 
