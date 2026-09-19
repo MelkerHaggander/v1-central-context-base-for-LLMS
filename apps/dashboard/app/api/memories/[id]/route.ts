@@ -35,3 +35,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
   return jsonOwned(result.data, account.id);
 }
+
+// MOCK. DELETE /api/memories/:id -> { success: true }, eller error-objekt.
+// Finns inte som MCP-verktyg. Bara cookie-session.
+export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const up = await proxyToUpstream(request, `/api/memories/${encodeURIComponent(id)}`);
+  if (up) return up;
+
+  const account = await currentAccount();
+  if (!account) return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
+
+  const result = mockDb.deleteMemory(account.id, id);
+  if ("error" in result) {
+    const status =
+      result.error.code === "NOT_FOUND" ? 404 : result.error.code.startsWith("INVALID_") ? 400 : 500;
+    return jsonError(result.error.code, result.error.message, status);
+  }
+  // Kontraktet i docs/filip-auth.md: naket { success: true }, inte { data }.
+  return jsonOwned(result.data, account.id);
+}

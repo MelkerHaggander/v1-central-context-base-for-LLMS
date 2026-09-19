@@ -20,7 +20,17 @@ export function upstreamEnabled(): boolean {
 }
 
 const FORWARD_REQUEST_HEADERS = ["cookie", "content-type", "accept", "accept-language"];
-const FORWARD_RESPONSE_HEADERS = ["content-type"];
+
+/**
+ * x-v1-user-id must be forwarded. Alfredos API sets it (docs/filip-auth.md) and
+ * lib/tab-session.ts compares it against the account this tab is bound to. It
+ * was missing from this list, so in upstream mode the header never reached the
+ * browser, memoryBelongsToTab() saw null, and the tab-isolation guard added in
+ * cursor/session-isolate-d243 passed everything through. Mock mode was fine
+ * because jsonOwned() sets it locally, which is why it went unnoticed: the guard
+ * was only off in the mode that has real accounts in it.
+ */
+const FORWARD_RESPONSE_HEADERS = ["content-type", "x-v1-user-id"];
 
 /**
  * Returnerar null i mock-läge (anroparen svarar själv). Annars svaret från Alfredos API,

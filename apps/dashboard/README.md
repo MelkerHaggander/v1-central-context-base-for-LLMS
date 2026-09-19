@@ -1,119 +1,176 @@
-# `apps/dashboard/` — Filips leverans
+# `apps/dashboard/` — Boringcontext dashboard (V2)
 
-**Person:** Filip  
-**Branch:** `filip/dashboard`  
-**Stack:** Next.js 16, React 19, TypeScript, Tailwind 4, deploy på **Vercel** (region `arn1`, Stockholm)  
-**Kontrakt:** [docs/contracts.md](../../docs/contracts.md). Inget eget minnesformat.
+**Owner:** Filip
+**Branch:** `filip/dashboard-v2`, branched from `integration/v1.1`
+**Stack:** Next.js 16, React 19, TypeScript, Tailwind 4, deployed on Vercel (region `arn1`, Stockholm)
+**Contract:** [docs/contracts.md](../../docs/contracts.md) and [docs/filip-auth.md](../../docs/filip-auth.md). No memory format of its own.
+**Language:** English. Required by *Mål för V1.1* section 2.
 
-## Kör lokalt
+## What V2 adds over V1
+
+| | V1 | V2 |
+| --- | --- | --- |
+| Main view | a list of 50 rows | a globe of every memory, list beside it |
+| Create | not possible | `POST /api/memories` |
+| Edit | not possible | `PATCH /api/memories/:id` |
+| Delete | not possible | `DELETE /api/memories/:id`, two-step confirm |
+| Categories | five, Swedish labels | six including Lesson, English labels |
+| Created date | not shown | shown per memory, plus updated |
+| Totals | none | counted across all pages, with a truncation warning |
+| Theme | followed the OS | follows the OS, with a toggle |
+| Name | "Claude-minne" | Boringcontext |
+
+## The globe
+
+`/dashboard` is the globe. One dot is one memory. **Position is the project**,
+**colour is the category**. Clicking goes down one level at a time: the whole
+sphere to a project, a project to a single memory. Drag to turn it. Escape goes
+back out.
+
+It is real 3D. Unit vectors on a sphere, a rotation matrix, a perspective divide
+and a back-to-front depth sort, drawn on a 2D canvas.
+
+**There is no 3D library and no new dependency, on purpose.** `package-lock.json`
+is unchanged by this branch. `apps/api` builds from the same lockfile on Vercel,
+so a WebGL dependency here would land in the deployment that serves `/api/mcp`
+as well, to draw a few hundred dots that canvas handles at 60fps. If the globe
+ever needs real WebGL, `components/globe/GlobeCanvas.tsx` is the only file that
+has to change: the maths in `lib/globe/` is renderer-agnostic and unit tested.
+
+| File | Job |
+| --- | --- |
+| `lib/globe/sphere.ts` | Where a dot goes. Project zones, deterministic placement from the memory id. |
+| `lib/globe/camera.ts` | Rotation, perspective, fly-to, hit testing. |
+| `components/globe/GlobeCanvas.tsx` | The loop, the input, the paint. |
+| `components/GlobeView.tsx` | Breadcrumb, legend, panels, editor. |
+
+A dot's position comes from a hash of its id, so it keeps the same spot across
+refreshes. A dot that jumped every fifteen seconds would make the globe useless.
+A project's zone comes from its **name**, never its size, so a project does not
+move across the sphere because it gained a memory.
+
+## Colour is not decoration
+
+The six category hues are validated, not chosen by eye. Every neighbouring pair
+in the category order clears colour-vision separation (worst adjacent CVD deltaE
+16.3 light, 13.2 dark, target >= 8) and the normal-vision floor (19.6 and 19.3,
+floor 15) against both surfaces. The values and the order live in
+`lib/categories.ts`; re-validate before changing either.
+
+Two consequences that are easy to undo by accident:
+
+- On the light surface Goal and Deadline sit below 3:1 contrast, so **colour is
+  never the only channel**. Every dot, chip and legend row carries its label as
+  text, and the panel is the full text equivalent of the globe.
+- The interface chrome has **no hue at all**. The accent is the ink itself, so no
+  button, border or focus ring can be mistaken for a category.
+
+## Accessibility
+
+A canvas cannot be tabbed into, so it is never the only route to anything. Every
+project and every category is a real button next to it, the panel lists every
+field of every memory as text, and the sphere stops spinning when the reader
+prefers reduced motion.
+
+## Totals are honest about their ceiling
+
+The contract has no count and no aggregate endpoint: `GET /api/memories` returns
+at most 50 rows with an offset. So the totals are counted in the browser by
+walking pages (`fetchAllMemories`), with a ceiling of `MAX_PAGES` (20 pages,
+1000 rows).
+
+When the ceiling is reached the view says so in plain text instead of printing a
+total it cannot stand behind. **The clean fix is a count on the API**, which is
+Alfredo's call because the contract is locked.
+
+## Not built, and why
+
+*Mål för V1.1* section 2 asks the dashboard to show **which LLM or conversation a
+memory came from**. It cannot be done from here. `public.memories` has
+`id, user_id, project, category, title, content, created_at, updated_at` and
+nothing about the client that wrote the row
+(`supabase/migrations/20260911162129_create_memories.sql`). Nothing in a row
+identifies Claude from ChatGPT from Grok.
+
+It needs a column plus the MCP server setting it, which is `apps/api` and a
+migration against the shared database, so by the stop rule in *Egna
+V1-experiment med gemensam Supabase* it is a team decision, not a branch change.
+Until then the detail panel says **Source: not recorded** rather than guessing.
+
+## A bug this branch fixes
+
+`lib/upstream.ts` did not forward `x-v1-user-id`. Alfredo's API sets it
+(docs/filip-auth.md) and `lib/tab-session.ts` compares it against the account the
+tab is bound to, so in upstream mode the header never reached the browser,
+`memoryBelongsToTab()` saw `null`, and the tab-isolation guard from
+`cursor/session-isolate-d243` passed everything through. Mock mode was fine
+because `jsonOwned()` sets the header locally, which is why it went unnoticed:
+the guard was only off in the mode that has real accounts in it.
+
+## Run it locally
 
 ```bash
 cd apps/dashboard
-npm install --include=dev   # --include=dev krävs om NODE_ENV=production är satt globalt (Filips dator)
-npm run dev        # http://localhost:3000
-npm test           # 11 tester: kontrakt mot mock-lagringen + instruktionstext mot docs
-npm run build      # samma build som Vercel kör
+npm install --include=dev   # --include=dev is needed when NODE_ENV=production is set globally
+npm run dev                 # http://localhost:3000
+npm test                    # contract, globe maths, aggregation, instruction text
+npm run build               # the same build Vercel runs
 ```
 
-Utan miljövariabler startar dashboarden i **fristående mock-läge**. Logga in med
-`filip@example.com`, `alfredo@example.com` eller `melker@example.com` och lösenordet
-`mock-losen` (kan bytas med `MOCK_PASSWORD`). Varje mock-konto har de tre exempelminnena
-från [docs/testexempel.md](../../docs/testexempel.md) med olika `id`, så isoleringen syns.
+With no environment variables it starts in **standalone mock mode**. Sign in with
+`filip@example.com`, `alfredo@example.com` or `melker@example.com` and the
+password `mock-losen` (override with `MOCK_PASSWORD`). Each mock account is seeded
+with 22 memories across 5 projects and all six categories, so the globe has
+something to be a globe about. The mock store lives in the server process and
+resets on restart. That is deliberate.
 
-Mock-lagringen lever i serverprocessen och nollställs vid omstart. Det är avsiktligt.
+## Two modes, one codebase
 
-## Två lägen, samma kod
-
-| Läge | `API_BASE_URL` | Vad händer med `/api/*` |
+| Mode | `API_BASE_URL` | What happens to `/api/*` |
 | --- | --- | --- |
-| Fristående (mock) | tom | Route-filerna under `app/api/` svarar själva med mock-lagringen. |
-| Måndag (riktigt) | `https://<preview för integration/v1>` | Samma route-filer skickar anropet vidare till Alfredos API via `lib/upstream.ts`. Webbläsaren ser bara dashboardens origin, så Supabases `Set-Cookie` sätts på dashboardens domän och följer med i nästa anrop. Ingen CORS behövs (Alfredos API har ingen). |
+| Standalone (mock) | empty | The route files under `app/api/` answer from the mock store. |
+| Live | `https://v1-central-context-base-for-llms.vercel.app` | The same route files forward to Alfredo's API via `lib/upstream.ts`. |
 
-Vyerna anropar bara `lib/api.ts`. Bytet mock → riktigt är en miljövariabel, ingen kodändring.
+The views only call `lib/api.ts`. Switching mock to live is one environment
+variable, not a code change.
 
-Proxyn är testad end-to-end lokalt med två instanser (en som spelar Alfredos API): login-cookie
-sätts via proxyn, session/lista/PATCH/logout går igenom, felobjekt passerar oförändrade.
-Upstream nere ger `UPSTREAM_UNREACHABLE` (502). Upstream som svarar HTML (t.ex. Vercels
-inloggningssida vid Deployment Protection) ger `UPSTREAM_NOT_JSON` (502) med tydlig text.
+## Deploying this branch
 
-`VERCEL_PROTECTION_BYPASS`: om Alfredos preview är skyddad, sätt hemligheten från hans
-Vercel-projekt här. Proxyn skickar den som `x-vercel-protection-bypass`.
+A separate Vercel project, per *Egna V1-experiment med gemensam Supabase*:
 
-`NEXT_PUBLIC_MCP_URL` visas i anslutningsguiden. Tomt = `API_BASE_URL` + `/api/mcp`, så den
-pekar automatiskt på samma preview som API:t.
+1. Same team, same GitHub repo.
+2. **Root Directory `apps/dashboard`**. This is the step that is easy to miss:
+   the existing project `v1-central-context-base-for-llms` has Root Directory
+   `apps/api` and does not build this app at all.
+3. Production Branch: this branch.
+4. Environment variables: `API_BASE_URL`, and `VERCEL_PROTECTION_BYPASS` only if
+   the upstream deployment has Deployment Protection on.
 
-## Kompatibilitet med Alfredo och Melker (kontrollerat 13/9 mot deras grenar)
+**This app needs no Supabase keys.** It never talks to Supabase; it forwards to
+`apps/api`, which holds them. In particular `SUPABASE_SERVICE_ROLE_KEY` does not
+belong in this project: it bypasses row level security and the dashboard has no
+use for it.
 
-| Krav | Källa | Dashboard |
-| --- | --- | --- |
-| `GET /api/memories` är en ren lista, inte `{ data }` | Alfredo `jsonOk(result.data)`, Melkers överlämning | `lib/api.ts` läser listan direkt |
-| Login/session ger `{ data: { id, email } }` eller `{ data: null }` | Alfredo `auth/*` | `useSession`, login-sidan |
-| 401 `UNAUTHENTICATED` när sessionen dött | Alfredo `requireUser()` | Skickar till inloggning |
-| PATCH `/api/memories/:id`, 404 `NOT_FOUND` med låst text | Alfredo `[id]/route.ts` | Mock speglar exakt |
-| Kategorier gemener mot API, svenska etiketter i UI | contracts.md | `CATEGORY_LABELS` |
-| Instruktionstexten byte-lik `docs/claude-instruktioner.md` (nya blocket, inte enradaren) | torsdag-test 13 och 16 | `test/instructions.test.ts` faller vid drift |
-| Tom lista visas som tom, inte mock-rader (test 8, 15) | torsdag-test | Mock används aldrig när `API_BASE_URL` är satt |
-| Same origin, `credentials: "include"` | filip-auth.md | Proxy i `lib/upstream.ts` |
-| OAuth-vyn: samma fältnamn/action som Alfredos sida | Alfredo `oauth/authorize/page.tsx` | `components/OAuthApproveView.tsx` |
+## Tests
 
-## Vad som finns
+`npm test` runs, in `test/`:
 
-| Sida | Väg | Beteende |
-| --- | --- | --- |
-| Inloggning | `/` | `POST /api/auth/login`. Fel lösen visar `Fel mejl eller lösenord.` med koden. Redan inloggad skickas till `/dashboard`. |
-| Minneslista | `/dashboard` | `GET /api/memories?project=&category=&query=&offset=`. Ren JSON-lista. Svenska etiketter. Senast uppdaterat först. Auto-hämtning var 10:e sekund när fliken är synlig, pausar när den är dold, plus Uppdatera-knapp. Sida 50 med Föregående/Nästa. Tom lista är ett giltigt läge. `UNAUTHENTICATED` skickar till inloggning. |
-| Anslutningsguide | `/anslut` | Fyra steg, kopieringsknappar för MCP-adress och instruktionstexten (exakt från `docs/claude-instruktioner.md`). |
-| OAuth-godkännande | `/oauth/authorize` | Samma fältnamn och action som Alfredos sida. Slutlägen: ansluten, feltext. Neka skickar tillbaka till klientens `redirect_uri` med `error=access_denied`. Mock-`/oauth/approve` verifierar mot mock-kontona. |
-| Utloggning | knapp i toppraden | `POST /api/auth/logout` → `{ data: { success: true } }` → tillbaka till `/`. |
+- `mock-store.test.ts` — the mock store against contracts.md, including `lesson`.
+- `instructions.test.ts`, `mcp-instructions.test.ts` — the instruction text is
+  byte-identical to `docs/`. Do not translate those strings: they are
+  instructions to the model, not interface copy, and these tests fail on drift.
+- `deny-url.test.ts` — the OAuth deny link.
+- `globe-sphere.test.ts` — determinism, containment, non-overlapping zones,
+  stable placement when counts change.
+- `globe-camera.test.ts` — rotation, projection, clamping, and that a dot on the
+  far side of the globe can never be clicked.
+- `aggregate.test.ts` — counting, truncation flag, and field validation in the
+  server's order.
 
-Fel visas alltid som text. Ett `error`-svar visas aldrig som lyckat.
+## For Alfredo: the OAuth view
 
-På `integration/v1` visas den här UI:n från **samma** Vercel-projekt som API:t
-(`apps/api`, Root Directory oförändrad): `/`, `/dashboard`, `/anslut`. Mock och
-`API_BASE_URL`-proxy behövs inte där — samma origin.
-
-## Till Alfredo: OAuth-vyn
-
-Utseendet ligger i `components/OAuthApproveView.tsx`, en ren serverkomponent utan hooks.
-Kopiera filen till `apps/api/components/` och rendera den från `apps/api/app/oauth/authorize/page.tsx`
-med samma värden som idag (`valid`, `clientId`, `redirectUri`, `state`, `codeChallenge`,
-`codeChallengeMethod`, `email`, `errorText`). Formuläret postar till `/oauth/approve` med exakt
-samma fältnamn som nu.
-
-Knappen **Neka** går inte via `/oauth/approve`. Den länkar till `redirect_uri` med
-`error=access_denied` och samma `state` (standard OAuth 2.0), så ditt flöde behöver inte ändras.
-
-Tailwind-tokens (`bg-accent`, `bg-panel`, `text-danger` osv.) definieras i `app/globals.css`.
-Kopiera `:root`-blocket dit också, annars blir vyn ostylad.
-
-## Klart på grenen
-
-- [x] Inloggning, felinloggning och utloggning följer JSON-kontraktet
-- [x] Lista, sök, filter och 10-sekunders-refresh fungerar mot mock
-- [x] Anslutningsguide + OAuth-vy går att klicka igenom
-- [x] Svenska kategorietiketter stämmer
-- [x] README förklarar `npm run dev` / Vercel
-- [x] Ingen kod beror på att Alfredos eller Melkers tjänster körs
-
-## Vercel
-
-Nytt Vercel-projekt med **Root Directory `apps/dashboard`**. `vercel.json` sätter region `arn1`.
-Miljövariabler: `API_BASE_URL`, ev. `VERCEL_PROTECTION_BYPASS`, ev. `NEXT_PUBLIC_MCP_URL`.
-
-## Måndag 14/9
-
-Grenen mergas till **`integration/v1`** efter Alfredo och Melker. Inte direkt till `main`.
-Sätt `API_BASE_URL` till previewen från `integration/v1` och kör listan i
-[docs/torsdag-test.md](../../docs/torsdag-test.md).
-
-Verifierat 13/9 från Filips dator mot Alfredos preview (`alfredo/integrations`), med
-`API_BASE_URL` satt och Filips testkonto: fel lösen → `INVALID_CREDENTIALS`; login sätter
-Supabases riktiga cookie `sb-…-auth-token` på dashboardens origin via proxyn; session, ren
-lista, POST (201), identisk omsparning (samma `id` och `updated_at`), sök `query=typescript`,
-`category=Beslut` → `INVALID_CATEGORY`, `project=Projekt a` → `[]`, PATCH samma `id`,
-PATCH påhittat `id` → 404 `NOT_FOUND` med låst text. I webbläsaren: inloggning, lista med
-svenska etiketter och samma `id`, ny rad synlig inom 10 s utan klick, anslutningsguiden med
-härledd MCP-adress.
-
-Återstår för test 14-16: samma sak mot previewen för **`integration/v1`** (efter merge), och
-Claude via MCP i stället för curl.
+Still `components/OAuthApproveView.tsx`, still a server component with no hooks,
+still the same field names and the same action. It is English now and says
+Boringcontext. The `OAUTH_ERROR_TEXT` keys are unchanged; only the text is
+translated. Copy the `:root` block from `app/globals.css` along with it or the
+view renders unstyled.

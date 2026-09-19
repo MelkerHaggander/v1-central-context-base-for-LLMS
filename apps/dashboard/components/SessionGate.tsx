@@ -13,13 +13,13 @@ export function SessionGate({ children }: { children: (user: SessionUser) => Rea
   }
 
   if (user === undefined) {
-    return <main className="p-6 text-sm text-muted">Kontrollerar inloggning…</main>;
+    return <main className="p-6 text-sm text-ink-3">Checking sign-in…</main>;
   }
 
   if (!user) {
     return (
       <main className="mx-auto w-full max-w-md p-6">
-        <ErrorText message={error ?? "Ogiltig session. Logga in igen."} />
+        <ErrorText message={error ?? "That session is not valid. Sign in again."} />
       </main>
     );
   }
@@ -38,17 +38,17 @@ function AccountSwitched({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-4 py-12">
-      <h1 className="text-xl font-semibold">Kontot byttes i webbläsaren</h1>
-      <p className="text-sm text-muted">
-        Ett annat konto loggade in i en annan flik. Flikar delar samma inloggning, så den här
-        fliken har tömts. Minnen från olika konton blandas inte.
+      <h1 className="text-xl font-semibold">The account changed in this browser</h1>
+      <p className="text-sm text-ink-2">
+        Another account signed in in a different tab. Tabs share one sign-in, so this tab was
+        cleared. Memories from two accounts are never shown together.
       </p>
       <p className="text-sm">
-        Webbläsaren är nu inloggad som <strong>{incoming.email}</strong>.
+        This browser is now signed in as <strong>{incoming.email}</strong>.
       </p>
       <div className="flex flex-col gap-2">
         <Button type="button" onClick={onContinue}>
-          Visa bara minnen för {incoming.email}
+          Show only {incoming.email}
         </Button>
         <Button
           variant="ghost"
@@ -57,7 +57,7 @@ function AccountSwitched({
             router.replace("/");
           }}
         >
-          Gå till inloggning
+          Go to sign-in
         </Button>
       </div>
     </main>

@@ -62,7 +62,10 @@ export function useSession() {
 
   useEffect(() => {
     alive.current = true;
-    void refresh();
+    // Deferred by a tick so the effect starts the check instead of setting state
+    // during render. Pre-existing lint error on integration/v1.1; same fix as the
+    // other hooks in this branch.
+    const start = window.setTimeout(() => void refresh(), 0);
     const unsubscribe = subscribeSessionChanged(() => {
       void refresh();
     });
@@ -76,6 +79,7 @@ export function useSession() {
     }, 4000);
     return () => {
       alive.current = false;
+      window.clearTimeout(start);
       unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);

@@ -27,18 +27,19 @@ export type OAuthApproveProps = {
   banner?: string;
 };
 
+// The keys are part of the contract with /oauth/approve. Only the text is English.
 export const OAUTH_ERROR_TEXT: Record<string, string> = {
-  credentials: "Fel mejl eller lösenord.",
-  config: "Servern saknar Supabase-koppling.",
-  client: "Klienten kunde inte verifieras. Starta om Connect i Claude, ChatGPT eller Kimi.",
-  invalid: "Ogiltig OAuth-begäran. Öppna adressen från klienten, inte direkt.",
-  resource: "Fel MCP-adress i OAuth-begäran. Använd samma /api/mcp som du kopplade.",
-  store: "Inloggningen gick igenom men koden kunde inte sparas. Försök igen.",
-  denied: "Du nekade åtkomst. Klienten kan inte läsa eller spara dina minnen.",
+  credentials: "Wrong email or password.",
+  config: "The server has no Supabase connection.",
+  client: "The client could not be verified. Start Connect again in Claude, ChatGPT or Kimi.",
+  invalid: "Invalid OAuth request. Open the address from the client, not directly.",
+  resource: "Wrong MCP address in the OAuth request. Use the same /api/mcp you connected.",
+  store: "Sign-in worked but the code could not be saved. Try again.",
+  denied: "You denied access. The client cannot read or save your memories.",
 };
 
 const input =
-  "w-full rounded-md border border-line bg-panel px-3 py-2 text-sm text-foreground outline-none focus:border-accent";
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-line-2";
 
 /**
  * Neka = standard OAuth 2.0-avslag (RFC 6749 §4.1.2.1): tillbaka till klientens redirect_uri
@@ -49,7 +50,7 @@ export function denyUrl(redirectUri: string, state: string): string {
   try {
     const url = new URL(redirectUri);
     url.searchParams.set("error", "access_denied");
-    url.searchParams.set("error_description", "Användaren nekade åtkomst.");
+    url.searchParams.set("error_description", "The user denied access.");
     if (state) url.searchParams.set("state", state);
     return url.toString();
   } catch {
@@ -63,42 +64,49 @@ export function OAuthApproveView(p: OAuthApproveProps) {
   return (
     <main className="mx-auto flex min-h-full w-full max-w-md flex-1 flex-col justify-center gap-5 px-4 py-12">
       {p.banner ? (
-        <p className="rounded-md border border-line bg-accent-soft px-3 py-2 text-xs text-accent">
+        <p className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs text-ink-2">
           {p.banner}
         </p>
       ) : null}
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Claude-minne</p>
-        <h1 className="mt-1 text-2xl font-semibold">Ge klienten åtkomst till ditt minne?</h1>
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-3">Boringcontext</p>
+        <h1 className="mt-1 text-2xl font-semibold">Give this client access to your memory?</h1>
       </div>
 
       {p.result === "connected" ? (
-        <StatusBox tone="ok" title="Ansluten">
-          Klienten får nu spara, söka och uppdatera minnen som tillhör{" "}
-          <strong>{p.email || "ditt konto"}</strong>. Du kan stänga det här fönstret och gå
-          tillbaka till Claude, ChatGPT eller Kimi.
+        <StatusBox tone="ok" title="Connected">
+          The client can now save, search and update memories belonging to{" "}
+          <strong>{p.email || "your account"}</strong>. You can close this window and go back to
+          Claude, ChatGPT or Kimi.
         </StatusBox>
       ) : p.result === "denied" ? (
-        <StatusBox tone="bad" title="Nekad">
-          {OAUTH_ERROR_TEXT.denied} Stäng fönstret och anslut igen om du ångrar
-          dig.
+        <StatusBox tone="bad" title="Denied">
+          {OAUTH_ERROR_TEXT.denied} Close the window and connect again if you change your mind.
         </StatusBox>
       ) : !p.valid ? (
-        <StatusBox tone="bad" title="Ogiltig begäran">
+        <StatusBox tone="bad" title="Invalid request">
           {p.errorText || OAUTH_ERROR_TEXT.invalid}
         </StatusBox>
       ) : (
         <>
-          <ul className="rounded-md border border-line bg-panel px-4 py-3 text-sm">
-            <li className="py-1">Klienten får <strong>spara</strong> fakta, beslut, mål, deadlines och preferenser.</li>
-            <li className="py-1">Klienten får <strong>söka och uppdatera</strong> dina minnen.</li>
-            <li className="py-1">Klienten ser <strong>aldrig</strong> andra kontons minnen.</li>
+          <ul className="rounded-xl border border-line bg-surface px-4 py-3 text-sm">
+            <li className="py-1">
+              The client may <strong>save</strong> facts, decisions, goals, deadlines, preferences
+              and lessons.
+            </li>
+            <li className="py-1">
+              The client may <strong>search and update</strong> your memories.
+            </li>
+            <li className="py-1">
+              The client can <strong>never</strong> delete anything, and never sees another
+              account&apos;s memories.
+            </li>
           </ul>
 
           <form className="flex flex-col gap-3" method="post" action={action}>
             {p.errorText ? (
-              <p role="alert" className="rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
+              <p role="alert" className="rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
                 {p.errorText}
               </p>
             ) : null}
@@ -110,7 +118,7 @@ export function OAuthApproveView(p: OAuthApproveProps) {
             {p.resource ? <input type="hidden" name="resource" value={p.resource} /> : null}
 
             <label className="flex flex-col gap-1 text-sm">
-              E-post
+              Email
               <input
                 className={input}
                 type="email"
@@ -121,7 +129,7 @@ export function OAuthApproveView(p: OAuthApproveProps) {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              Lösenord
+              Password
               <input
                 className={input}
                 type="password"
@@ -130,22 +138,22 @@ export function OAuthApproveView(p: OAuthApproveProps) {
                 required
               />
             </label>
-            <p className="text-xs text-muted">
-              Logga in med samma konto som i dashboarden. Minnena hamnar på det konto du loggar in
-              med här.
+            <p className="text-xs text-ink-3">
+              Sign in with the same account as the dashboard. Memories land on whichever account you
+              sign in with here.
             </p>
             <div className="flex gap-2">
               <button
-                className="flex-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-background hover:opacity-90"
+                className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:opacity-88"
                 type="submit"
               >
-                Logga in och godkänn
+                Sign in and approve
               </button>
               <a
-                className="rounded-md border border-line bg-panel px-3 py-2 text-sm text-foreground hover:bg-danger-soft"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-danger-soft"
                 href={denyUrl(p.redirectUri, p.state)}
               >
-                Neka
+                Deny
               </a>
             </div>
           </form>
@@ -166,11 +174,11 @@ function StatusBox({
 }) {
   const look =
     tone === "ok"
-      ? "border-accent/40 bg-accent-soft text-foreground"
-      : "border-danger/40 bg-danger-soft text-foreground";
+      ? "border-line-2 bg-surface-2 text-ink"
+      : "border-danger/40 bg-danger-soft text-ink";
   return (
-    <div className={`rounded-md border px-4 py-3 text-sm ${look}`}>
-      <p className={`font-semibold ${tone === "ok" ? "text-accent" : "text-danger"}`}>{title}</p>
+    <div className={`rounded-xl border px-4 py-3 text-sm ${look}`}>
+      <p className={`font-semibold ${tone === "ok" ? "text-ink" : "text-danger"}`}>{title}</p>
       <p className="mt-1">{children}</p>
     </div>
   );

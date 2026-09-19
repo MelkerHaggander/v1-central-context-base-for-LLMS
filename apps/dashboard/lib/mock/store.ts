@@ -143,6 +143,22 @@ export class MockMemoryStore {
     return { data: rows.slice(p.offset, p.offset + PAGE_SIZE).map(strip) };
   }
 
+  /**
+   * Mirrors DELETE /api/memories/:id in Alfredos API (policy memories_delete_own).
+   * A missing row and another account's row give the same error, so the answer
+   * never reveals whether an id exists. Not reachable over MCP.
+   */
+  deleteMemory(userId: string, id: string): Result<{ success: true }> {
+    const idCheck = validateMemoryId(id);
+    if ("error" in idCheck) return idCheck;
+
+    const index = this.rows.findIndex((r) => r.id === idCheck.data && r.user_id === userId);
+    if (index === -1) return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
+
+    this.rows.splice(index, 1);
+    return { data: { success: true } };
+  }
+
   updateMemory(userId: string, input: MemoryInput & { id: string }): Result<Memory> {
     const idCheck = validateMemoryId(input.id);
     if ("error" in idCheck) return idCheck;
