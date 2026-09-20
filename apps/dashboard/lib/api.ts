@@ -21,12 +21,12 @@ import { PAGE_SIZE, isApiError } from "./types";
 const ACCOUNT_SWITCHED: ApiError = {
   error: {
     code: "ACCOUNT_SWITCHED",
-    message: "Ett annat konto är inloggat i den här webbläsaren. Minnen blandas inte.",
+    message: "Another account is signed in in this browser. Memories are not mixed.",
   },
 };
 
 const NETWORK_ERROR: ApiError = {
-  error: { code: "NETWORK_ERROR", message: "Kunde inte nå servern. Kontrollera anslutningen." },
+  error: { code: "NETWORK_ERROR", message: "Could not reach the server. Check the connection." },
 };
 
 async function request<T>(input: string, init?: RequestInit): Promise<T | ApiError> {
@@ -49,7 +49,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T | ApiErr
     return {
       error: {
         code: "INVALID_RESPONSE",
-        message: `Servern svarade ${response.status} utan giltig JSON.`,
+        message: `The server answered ${response.status} without valid JSON.`,
       },
     };
   }
@@ -57,7 +57,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T | ApiErr
   if (isApiError(body)) return body;
   if (!response.ok) {
     return {
-      error: { code: `HTTP_${response.status}`, message: `Servern svarade ${response.status}.` },
+      error: { code: `HTTP_${response.status}`, message: `The server answered ${response.status}.` },
     };
   }
   return body as T;
@@ -106,7 +106,7 @@ export async function searchMemories(params: SearchInput & { expectedUserId?: st
     return {
       error: {
         code: "INVALID_RESPONSE",
-        message: `Servern svarade ${response.status} utan giltig JSON.`,
+        message: `The server answered ${response.status} without valid JSON.`,
       },
     };
   }
@@ -114,7 +114,7 @@ export async function searchMemories(params: SearchInput & { expectedUserId?: st
   if (isApiError(body)) return body;
   if (!response.ok) {
     return {
-      error: { code: `HTTP_${response.status}`, message: `Servern svarade ${response.status}.` },
+      error: { code: `HTTP_${response.status}`, message: `The server answered ${response.status}.` },
     };
   }
   const owner = response.headers.get(USER_ID_HEADER);

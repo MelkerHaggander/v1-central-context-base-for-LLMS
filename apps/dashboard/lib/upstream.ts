@@ -66,7 +66,7 @@ export async function proxyToUpstream(request: Request, path: string): Promise<R
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return json(
-      { error: { code: "UPSTREAM_UNREACHABLE", message: `Kunde inte nå API:t: ${message}` } },
+      { error: { code: "UPSTREAM_UNREACHABLE", message: `Could not reach the API: ${message}` } },
       502,
     );
   }

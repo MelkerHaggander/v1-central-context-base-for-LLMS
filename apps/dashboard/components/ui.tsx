@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CATEGORY_HINT, categoryVar, labelFor } from "@/lib/categories";
+import { displayErrorMessage } from "@/lib/display-error";
 
 export function ErrorText({ code, message }: { code?: string; message: string }) {
   return (
@@ -15,7 +16,7 @@ export function ErrorText({ code, message }: { code?: string; message: string })
       role="alert"
       className="rounded-lg border border-danger/35 bg-danger-soft px-3 py-2 text-sm text-danger"
     >
-      {message}
+      {displayErrorMessage(code, message)}
       {code ? <span className="ml-2 font-mono text-xs opacity-70">{code}</span> : null}
     </p>
   );

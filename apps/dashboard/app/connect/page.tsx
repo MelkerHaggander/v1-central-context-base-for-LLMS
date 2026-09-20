@@ -1,5 +1,5 @@
 import { ConnectView } from "@/components/ConnectView";
-import { mcpUrl } from "@/lib/claude-instructions";
+import { mcpUrl } from "@/lib/mcp-url";
 
 export const dynamic = "force-dynamic";
 

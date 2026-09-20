@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button, ErrorText, inputClass } from "@/components/ui";
 import { login, session } from "@/lib/api";
-import { bindTabUser, notifySessionChanged } from "@/lib/tab-session";
+import { bindTabUser, decideTabSession, getBoundTabUser, notifySessionChanged } from "@/lib/tab-session";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,11 +14,15 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ code?: string; message: string } | null>(null);
 
-  // Already signed in: straight to the globe.
+  // Already signed in as the account this tab is bound to: go to the globe.
+  // If the cookie belongs to another account, stay here so memories are not mixed.
   useEffect(() => {
     (async () => {
       const result = await session();
-      if (!("error" in result) && result.data) router.replace("/dashboard");
+      if ("error" in result || !result.data) return;
+      const decision = decideTabSession(getBoundTabUser(), result.data.id);
+      if (decision.action === "mismatch") return;
+      router.replace("/dashboard");
     })();
   }, [router]);
 

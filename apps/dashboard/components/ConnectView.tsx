@@ -10,20 +10,13 @@
  * used V1 will look for the paste step.
  */
 
-import { useEffect, useState } from "react";
 import { SessionGate } from "@/components/SessionGate";
 import { TopBar } from "@/components/TopBar";
-import { CopyButton, ErrorText } from "@/components/ui";
+import { CopyButton } from "@/components/ui";
+import { visibleMcpUrl } from "@/lib/mcp-url";
 
 export function ConnectView({ url }: { url: string }) {
-  const [resolvedUrl, setResolvedUrl] = useState(url);
-
-  useEffect(() => {
-    if (url) return;
-    // Deferred so the effect does not set state while rendering.
-    const id = window.setTimeout(() => setResolvedUrl(`${window.location.origin}/api/mcp`), 0);
-    return () => window.clearTimeout(id);
-  }, [url]);
+  const resolvedUrl = visibleMcpUrl(url);
 
   return (
     <SessionGate>
@@ -46,16 +39,15 @@ export function ConnectView({ url }: { url: string }) {
               </Step>
 
               <Step n={2} title="Copy the MCP address">
-                {resolvedUrl ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <code className="flex-1 break-all rounded-md border border-line bg-surface-2 px-3 py-2 text-sm">
-                      {resolvedUrl}
-                    </code>
-                    <CopyButton text={resolvedUrl} />
-                  </div>
-                ) : (
-                  <ErrorText message="The MCP address is missing. Open this page on the Vercel address, or set NEXT_PUBLIC_MCP_URL." />
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="flex-1 break-all rounded-md border border-line bg-surface-2 px-3 py-2 text-sm">
+                    {resolvedUrl}
+                  </code>
+                  <CopyButton text={resolvedUrl} />
+                </div>
+                <p className="mt-2 text-sm text-ink-2">
+                  Same address after every update. Do not paste a unique Vercel link.
+                </p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
                   <li>
                     Claude Desktop: Settings → Connectors → Add custom connector. Remote MCP server.
@@ -79,20 +71,12 @@ export function ConnectView({ url }: { url: string }) {
                     Kimi Code:{" "}
                     <code className="text-xs">
                       kimi mcp add --transport http --auth oauth central-memory{" "}
-                      {resolvedUrl || "https://YOUR-DOMAIN/api/mcp"}
+                      {resolvedUrl}
                     </code>{" "}
                     then <code className="text-xs">kimi mcp auth central-memory</code>. Not tested
                     in V1.1.
                   </li>
                 </ul>
-                {isVercelPreviewMcp(resolvedUrl) ? (
-                  <p className="mt-2 text-sm text-danger">
-                    ChatGPT cannot use this preview address. Vercel&apos;s own sign-in page blocks
-                    ChatGPT&apos;s servers. Use the production address for{" "}
-                    <code className="text-xs">/api/mcp</code>, not a{" "}
-                    <code className="text-xs">-git-</code> preview.
-                  </p>
-                ) : null}
               </Step>
 
               <Step n={3} title="Approve access, then just talk">
@@ -115,14 +99,6 @@ export function ConnectView({ url }: { url: string }) {
       )}
     </SessionGate>
   );
-}
-
-function isVercelPreviewMcp(url: string) {
-  try {
-    return new URL(url).hostname.includes("-git-");
-  } catch {
-    return false;
-  }
 }
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
