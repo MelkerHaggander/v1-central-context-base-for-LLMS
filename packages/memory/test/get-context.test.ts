@@ -224,7 +224,7 @@ test("case-insensitive project filter finds MCP-TEST as mcp-test", async () => {
   assert.equal(result.data.items[0]?.project, "MCP-TEST");
 });
 
-test("near-duplicate identities keep only the newest memory", async () => {
+test("near-duplicate saves expose only the newest content", async () => {
   let tick = Date.parse("2026-09-10T12:00:00Z");
   const memory = createMemoryApi(
     createInMemoryStore({
@@ -254,7 +254,7 @@ test("near-duplicate identities keep only the newest memory", async () => {
   assert.ok("data" in result);
   assert.equal(result.data.items.length, 1);
   assert.match(result.data.items[0]?.snippet ?? "", /60 användare/);
-  assert.equal(result.data.omitted, 1);
+  assert.equal(result.data.omitted, 0);
 });
 
 test("clips snippets and packs matches into the response budget", async () => {
