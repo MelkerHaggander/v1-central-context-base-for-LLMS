@@ -1,4 +1,4 @@
-import { createSupabaseAnonClient, createSupabaseUserClient } from "@/lib/supabase/clients";
+import { createSupabaseAdminClient, createSupabaseAnonClient, createSupabaseUserClient } from "@/lib/supabase/clients";
 import { fetchClientMetadata } from "./client-metadata";
 import { redirectAllowed as uriAllowed } from "./redirect";
 
@@ -58,21 +58,48 @@ export async function saveCode(row: {
   if (error) throw error;
 }
 
-export async function consumeCode(code: string) {
-  const supabase = createSupabaseAnonClient();
-  const { data, error } = await supabase.rpc("oauth_consume_code", { p_code: code });
-  if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) return null;
-  if (new Date(row.expires_at as string).getTime() < Date.now()) return null;
-  return row as {
-    code: string;
-    client_id: string;
-    redirect_uri: string;
-    code_challenge: string;
-    access_token: string;
-    refresh_token: string | null;
-    user_id: string;
-    expires_at: string;
+export type ExchangedCode = {
+  userId: string;
+  supabaseAccess: string;
+  supabaseRefresh: string;
+};
+
+export type OauthAdminRpc = {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+};
+
+function exchangedRow(data: unknown): ExchangedCode | null {
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { user_id?: string; access_token?: string; refresh_token?: string | null }
+    | undefined;
+  if (!row?.user_id || !row.access_token || !row.refresh_token) return null;
+  return {
+    userId: row.user_id,
+    supabaseAccess: row.access_token,
+    supabaseRefresh: row.refresh_token,
   };
+}
+
+/** Consume a code only when PKCE, client and redirect match. Service role only. */
+export async function exchangeAuthorizationCode(
+  input: {
+    code: string;
+    clientId: string;
+    redirectUri: string;
+    codeChallenge: string;
+  },
+  admin?: OauthAdminRpc,
+): Promise<ExchangedCode | null> {
+  const client = admin ?? createSupabaseAdminClient();
+  const { data, error } = await client.rpc("oauth_exchange_code", {
+    p_code: input.code,
+    p_client_id: input.clientId,
+    p_redirect_uri: input.redirectUri,
+    p_code_challenge: input.codeChallenge,
+  });
+  if (error) throw error;
+  return exchangedRow(data);
 }

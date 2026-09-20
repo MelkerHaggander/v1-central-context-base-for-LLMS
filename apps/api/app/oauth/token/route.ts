@@ -1,7 +1,6 @@
-import { pkceChallenge } from "@/lib/oauth/crypto";
+import { authorizationCodeGrant } from "@/lib/oauth/authorization-code";
 import { canonicalMcpResource, resourceAllowed } from "@/lib/oauth/resource";
-import { consumeCode } from "@/lib/oauth/store";
-import { issueMcpTokens, rotateMcpRefresh, type IssuedTokens } from "@/lib/oauth/sessions";
+import { rotateMcpRefresh, type IssuedTokens } from "@/lib/oauth/sessions";
 import { publicOrigin } from "@/lib/oauth/urls";
 
 export const dynamic = "force-dynamic";
@@ -64,30 +63,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "unsupported_grant_type" }, { status: 400, headers: TOKEN_HEADERS });
     }
 
-    const code = String(params.code ?? "");
-    const redirectUri = String(params.redirect_uri ?? "");
-    const clientId = String(params.client_id ?? "");
-    const verifier = String(params.code_verifier ?? "");
-    const row = await consumeCode(code);
-
-    if (
-      !row ||
-      row.client_id !== clientId ||
-      row.redirect_uri !== redirectUri ||
-      pkceChallenge(verifier) !== row.code_challenge ||
-      !row.refresh_token
-    ) {
-      return Response.json({ error: "invalid_grant" }, { status: 400, headers: TOKEN_HEADERS });
+    const result = await authorizationCodeGrant(params);
+    if ("error" in result) {
+      return Response.json({ error: result.error }, { status: 400, headers: TOKEN_HEADERS });
     }
-
-    const issued = await issueMcpTokens({
-      userId: row.user_id,
-      supabaseAccess: row.access_token,
-      supabaseRefresh: row.refresh_token,
-    });
-    return tokenJson(issued, boundResource);
+    return tokenJson(result.issued, boundResource);
   } catch (error) {
-    console.error("oauth_token_failed", error);
+    const misconfigured =
+      error instanceof Error && error.message === "Missing SUPABASE_SERVICE_ROLE_KEY";
+    console.error(misconfigured ? "oauth_token_misconfigured" : "oauth_token_failed");
     return Response.json({ error: "server_error" }, { status: 500, headers: TOKEN_HEADERS });
   }
 }
