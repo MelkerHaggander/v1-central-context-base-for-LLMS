@@ -155,6 +155,100 @@ test("expanded stopwords do not retrieve unrelated category memories", async () 
   assert.deepEqual(result.data.items, []);
 });
 
+test("snippet centers on the best content match instead of the opening", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Drift",
+    content: `${"Arkitektur och introduktion. ".repeat(20)}Backup körs varje natt klockan 02.`,
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "Hur fungerar backup?",
+  });
+  assert.ok("data" in result);
+  const value = result.data.items[0]?.snippet ?? "";
+  assert.match(value, /Backup körs varje natt/);
+  assert.ok(value.startsWith("…"));
+  assert.ok(value.length <= CONTEXT_SNIPPET_LIMIT);
+});
+
+test("category-only deadline intent returns deadlines without list mode", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Lansering",
+    content: "Lansering sker 5 november.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Databas",
+    content: "PostgreSQL används.",
+  });
+
+  for (const prompt of [
+    "Vilka deadlines har jag framför mig?",
+    "Vad är på gång?",
+  ]) {
+    const result = await memory.getContext(USER_A, { prompt });
+    assert.ok("data" in result);
+    assert.deepEqual(result.data.items.map((item) => item.category), [
+      "deadline",
+    ]);
+  }
+});
+
+test("short numeric date tokens remain searchable", async () => {
+  assert.deepEqual(extractKeywords("Vad händer 5 november?"), [
+    "händer",
+    "5",
+    "november",
+  ]);
+
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Första leverans",
+    content: "Första leveransen sker 5 november.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Andra leverans",
+    content: "Andra leveransen sker 12 november.",
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "När är leveransen 5 november?",
+  });
+  assert.ok("data" in result);
+  assert.equal(result.data.items[0]?.title, "Första leverans");
+});
+
+test("compound matching does not confuse lagerblad with lagerstyrning", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Lagerblad",
+    content: "Lagerbladet är grönt.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Lagerstyrning",
+    content: "Lagerstyrning körs automatiskt.",
+  });
+
+  const result = await memory.getContext(USER_A, { prompt: "lagerblad" });
+  assert.ok("data" in result);
+  assert.deepEqual(result.data.items.map((item) => item.title), ["Lagerblad"]);
+});
+
 test("launch synonym matches lansering without returning every deadline", async () => {
   const memory = createMemoryApi(createInMemoryStore());
   await memory.saveMemory(USER_A, {
@@ -174,6 +268,26 @@ test("launch synonym matches lansering without returning every deadline", async 
   assert.ok("data" in result);
   assert.deepEqual(result.data.keywords, ["launch"]);
   assert.deepEqual(result.data.items.map((item) => item.title), ["Lansering"]);
+});
+
+test("returned user data is marked, timestamped and HTML-escaped", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  const saved = await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Backup HTML",
+    content: "<script>alert('x')</script> & backup körs varje natt.",
+  });
+  assert.ok("data" in saved);
+
+  const result = await memory.getContext(USER_A, { prompt: "backup" });
+  assert.ok("data" in result);
+  const item = result.data.items[0];
+  assert.equal(item?.source, "user_memory");
+  assert.equal(item?.updated_at, saved.data.updated_at);
+  assert.match(item?.snippet ?? "", /&lt;script>/);
+  assert.match(item?.snippet ?? "", /&amp; backup/);
+  assert.doesNotMatch(item?.snippet ?? "", /<script>/);
 });
 
 test("content keywords beat same-project noise in Swedish and English", async () => {
@@ -257,6 +371,65 @@ test("near-duplicate saves expose only the newest content", async () => {
   assert.equal(result.data.omitted, 0);
 });
 
+test("reports duplicate and capped omissions separately", async () => {
+  const rows = Array.from({ length: CONTEXT_ITEM_LIMIT + 2 }, (_, index) => ({
+    id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(index + 1).padStart(12, "0")}`,
+    project: "MCP-TEST",
+    category: "fact" as const,
+    title: `Gemensam ${index}`,
+    content: `Gemensam rad ${index}.`,
+    created_at: "2026-09-10T12:00:00Z",
+    updated_at: `2026-09-10T12:00:${String(index).padStart(2, "0")}Z`,
+  }));
+  rows.push({
+    ...rows[0]!,
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-000000000001",
+    content: "Gemensam äldre dubblett.",
+    updated_at: "2026-09-10T11:59:59Z",
+  });
+  const base = createInMemoryStore();
+  const memory = createMemoryApi({
+    ...base,
+    async listByUser() {
+      return rows;
+    },
+  });
+
+  const result = await memory.getContext(USER_A, { prompt: "gemensam" });
+  assert.ok("data" in result);
+  assert.equal(result.data.omitted_duplicate, 1);
+  assert.equal(
+    result.data.omitted_capped,
+    CONTEXT_ITEM_LIMIT + 2 - result.data.items.length,
+  );
+  assert.equal(
+    result.data.omitted,
+    result.data.omitted_duplicate + result.data.omitted_capped,
+  );
+});
+
+test("returns a compact project hint only without a project filter", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  for (const project of ["Alpha", "Beta", "Gamma"]) {
+    await memory.saveMemory(USER_A, {
+      project,
+      category: "fact",
+      title: `${project} databas`,
+      content: `${project} använder PostgreSQL.`,
+    });
+  }
+
+  const broad = await memory.getContext(USER_A, { prompt: "databas" });
+  const filtered = await memory.getContext(USER_A, {
+    prompt: "databas",
+    project: "Alpha",
+  });
+  assert.ok("data" in broad && "data" in filtered);
+  assert.deepEqual(new Set(broad.data.projects), new Set(["Alpha", "Beta", "Gamma"]));
+  assert.equal("projects" in filtered.data, false);
+  assert.ok((broad.data.projects?.length ?? 0) <= 8);
+});
+
 test("clips snippets and packs matches into the response budget", async () => {
   let tick = Date.parse("2026-09-10T12:00:00Z");
   const memory = createMemoryApi(
@@ -291,7 +464,9 @@ test("clips snippets and packs matches into the response budget", async () => {
     "id",
     "project",
     "snippet",
+    "source",
     "title",
+    "updated_at",
   ]);
 });
 

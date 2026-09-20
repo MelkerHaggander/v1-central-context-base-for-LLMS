@@ -49,13 +49,18 @@ export type ContextItem = {
   category: Category;
   title: string;
   snippet: string;
+  updated_at: string;
+  source: "user_memory";
 };
 
 export type ContextResult = {
   keywords: string[];
   project?: string;
+  projects?: string[];
   items: ContextItem[];
   omitted: number;
+  omitted_duplicate: number;
+  omitted_capped: number;
 };
 
 export type AppError = {

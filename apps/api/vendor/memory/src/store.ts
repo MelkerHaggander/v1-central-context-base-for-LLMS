@@ -17,6 +17,7 @@ export const CONTEXT_SNIPPET_LIMIT = 280;
 export const CONTEXT_JSON_LIMIT = 3500;
 
 const STOP_WORDS = new Set([
+  "ahead",
   "after",
   "about",
   "again",
@@ -65,6 +66,7 @@ const STOP_WORDS = new Set([
   "from",
   "fråga",
   "från",
+  "framför",
   "för",
   "får",
   "had",
@@ -78,6 +80,7 @@ const STOP_WORDS = new Set([
   "hon",
   "how",
   "hur",
+  "innan",
   "is",
   "it",
   "its",
@@ -101,6 +104,7 @@ const STOP_WORDS = new Set([
   "måste",
   "my",
   "mycket",
+  "behöver",
   "någon",
   "något",
   "några",
@@ -160,6 +164,7 @@ const STOP_WORDS = new Set([
   "vi",
   "vid",
   "vilken",
+  "vilka",
   "vill",
   "will",
   "with",
@@ -167,6 +172,11 @@ const STOP_WORDS = new Set([
   "vår",
   "våra",
   "vårt",
+  "gång",
+  "gör",
+  "göra",
+  "need",
+  "needs",
   "you",
   "your",
   "är",
@@ -188,6 +198,8 @@ const CATEGORY_CUES: Record<Category, Set<string>> = {
   ]),
   goal: new Set(["goal", "goals", "mål", "målet", "målbild", "objective"]),
   deadline: new Set([
+    "kommande",
+    "lansering",
     "date",
     "datum",
     "deadline",
@@ -216,8 +228,11 @@ const CATEGORY_CUES: Record<Category, Set<string>> = {
   ]),
 };
 
+const LEXICAL_CATEGORY_CUES = new Set(["lansering"]);
 const CATEGORY_CUE_WORDS = new Set(
-  Object.values(CATEGORY_CUES).flatMap((cues) => [...cues]),
+  Object.values(CATEGORY_CUES)
+    .flatMap((cues) => [...cues])
+    .filter((cue) => !LEXICAL_CATEGORY_CUES.has(cue)),
 );
 
 const SYNONYM_GROUPS = [
@@ -282,7 +297,7 @@ function textStems(text: string): string[] {
 }
 
 function formMatchesToken(form: string, token: string): boolean {
-  return form === token || (form.length >= 5 && token.startsWith(form));
+  return form === token || (form.length >= 7 && token.startsWith(form));
 }
 
 function keywordMatches(forms: Set<string>, tokens: string[]): boolean {
@@ -297,7 +312,7 @@ export function extractKeywords(prompt: string): string[] {
     ...new Set(
       normalizedTokens(prompt).filter(
         (token) =>
-          token.length >= 3 &&
+          (token.length >= 3 || /^\d+$/u.test(token)) &&
           !STOP_WORDS.has(token) &&
           !CATEGORY_CUE_WORDS.has(token),
       ),
@@ -307,11 +322,19 @@ export function extractKeywords(prompt: string): string[] {
 
 function categoryCues(prompt: string): Set<Category> {
   const tokens = new Set(normalizedTokens(prompt));
-  return new Set(
+  const cues = new Set(
     (Object.entries(CATEGORY_CUES) as Array<[Category, Set<string>]>)
       .filter(([, cues]) => [...cues].some((cue) => tokens.has(cue)))
       .map(([category]) => category),
   );
+  const normalized = [...tokens].join(" ");
+  if (
+    normalized.includes("vad är på gång") ||
+    normalized.includes("what is coming up")
+  ) {
+    cues.add("deadline");
+  }
+  return cues;
 }
 
 function duplicateKey(row: MemoryRecord): string {
@@ -350,45 +373,182 @@ function newestByIdentity(rows: MemoryRecord[]): {
   return { rows: [...newest.values()], duplicateCounts };
 }
 
-function snippet(content: string): string {
-  const compact = content.trim().replace(/\s+/gu, " ");
-  if (compact.length <= CONTEXT_SNIPPET_LIMIT) return compact;
-  return `${compact.slice(0, CONTEXT_SNIPPET_LIMIT - 1).trimEnd()}…`;
+type MatchSpan = {
+  start: number;
+  end: number;
+  term: number;
+};
+
+function contentMatchSpans(content: string, terms: Set<string>[]): MatchSpan[] {
+  const spans: MatchSpan[] = [];
+  for (const match of content.matchAll(/[\p{L}\p{N}]+/gu)) {
+    const token = stemSwedishToken(match[0].toLocaleLowerCase("sv-SE"));
+    const start = match.index ?? 0;
+    for (const [term, forms] of terms.entries()) {
+      if ([...forms].some((form) => formMatchesToken(form, token))) {
+        spans.push({
+          start,
+          end: start + match[0].length,
+          term,
+        });
+      }
+    }
+  }
+  return spans;
 }
 
-function contextItem(row: MemoryRecord): ContextItem {
+function bestMatchSpan(spans: MatchSpan[]): MatchSpan | undefined {
+  let best: { span: MatchSpan; score: number } | undefined;
+  for (const span of spans) {
+    const center = (span.start + span.end) / 2;
+    const nearby = spans.filter(
+      (candidate) =>
+        Math.abs((candidate.start + candidate.end) / 2 - center) <=
+        CONTEXT_SNIPPET_LIMIT / 2,
+    );
+    const score = new Set(nearby.map((candidate) => candidate.term)).size * 10 + nearby.length;
+    if (!best || score > best.score) best = { span, score };
+  }
+  return best?.span;
+}
+
+function escapeUserText(value: string): string {
+  return value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;");
+}
+
+function escapedWindow(content: string, match?: MatchSpan): string {
+  if (!content) return "";
+
+  let left = match?.start ?? 0;
+  let right = match?.end ?? 0;
+  let expandLeft = true;
+
+  const value = (start: number, end: number) => {
+    const body = escapeUserText(content.slice(start, end).trim());
+    return `${start > 0 ? "…" : ""}${body}${end < content.length ? "…" : ""}`;
+  };
+
+  if (!match) {
+    while (
+      right < content.length &&
+      value(0, right + 1).length <= CONTEXT_SNIPPET_LIMIT
+    ) {
+      right += 1;
+    }
+    return value(0, right);
+  }
+
+  while (value(left, right).length > CONTEXT_SNIPPET_LIMIT && right > left) {
+    right -= 1;
+  }
+
+  let leftBlocked = left === 0;
+  let rightBlocked = right === content.length;
+  while (!leftBlocked || !rightBlocked) {
+    const tryLeft = expandLeft && !leftBlocked;
+    const nextLeft = tryLeft ? Math.max(0, left - 1) : left;
+    const nextRight =
+      !tryLeft && !rightBlocked ? Math.min(content.length, right + 1) : right;
+    if (value(nextLeft, nextRight).length <= CONTEXT_SNIPPET_LIMIT) {
+      left = nextLeft;
+      right = nextRight;
+      if (left === 0) leftBlocked = true;
+      if (right === content.length) rightBlocked = true;
+    } else if (tryLeft) {
+      leftBlocked = true;
+    } else {
+      rightBlocked = true;
+    }
+    expandLeft = !expandLeft;
+  }
+  return value(left, right);
+}
+
+function snippet(content: string, terms: Set<string>[]): string {
+  const compact = content.trim().replace(/\s+/gu, " ");
+  const span = bestMatchSpan(contentMatchSpans(compact, terms));
+  return escapedWindow(compact, span);
+}
+
+function contextItem(row: MemoryRecord, terms: Set<string>[]): ContextItem {
   return {
     id: row.id,
     project: row.project,
     category: row.category,
     title: row.title,
-    snippet: snippet(row.content),
+    snippet: snippet(row.content, terms),
+    updated_at: row.updated_at,
+    source: "user_memory",
   };
 }
 
 function contextResult(
   keywords: string[],
   project: string | undefined,
+  projects: string[] | undefined,
   items: ContextItem[],
-  omitted: number,
+  omittedDuplicate: number,
+  omittedCapped: number,
 ): ContextResult {
   return {
     keywords,
     ...(project === undefined ? {} : { project }),
+    ...(projects === undefined ? {} : { projects }),
     items,
-    omitted,
+    omitted: omittedDuplicate + omittedCapped,
+    omitted_duplicate: omittedDuplicate,
+    omitted_capped: omittedCapped,
   };
 }
 
-function outputKeywords(keywords: string[], project: string | undefined, omitted: number): string[] {
+function outputKeywords(
+  keywords: string[],
+  project: string | undefined,
+  projects: string[] | undefined,
+  omittedDuplicate: number,
+  omittedCapped: number,
+): string[] {
   const packed: string[] = [];
   for (const keyword of keywords) {
     if (packed.length >= 32) break;
     const next = [...packed, keyword];
-    if (JSON.stringify(contextResult(next, project, [], omitted)).length > 1000) break;
+    if (
+      JSON.stringify(
+        contextResult(
+          next,
+          project,
+          projects,
+          [],
+          omittedDuplicate,
+          omittedCapped,
+        ),
+      ).length > 1000
+    ) {
+      break;
+    }
     packed.push(keyword);
   }
   return packed;
+}
+
+function compactProjects(rows: MemoryRecord[]): string[] {
+  const newest = new Map<string, MemoryRecord>();
+  for (const row of rows) {
+    const key = row.project.normalize("NFKC").toLocaleLowerCase("sv-SE");
+    const current = newest.get(key);
+    if (!current || row.updated_at > current.updated_at) newest.set(key, row);
+  }
+
+  const projects: string[] = [];
+  for (const row of [...newest.values()].sort((a, b) =>
+    a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0,
+  )) {
+    if (projects.length >= 8) break;
+    const next = [...projects, row.project];
+    if (JSON.stringify(next).length > 500) break;
+    projects.push(row.project);
+  }
+  return projects;
 }
 
 export type NormalizedMemoryInput = {
@@ -523,6 +683,7 @@ export async function getContext(
     return fail("SEARCH_FAILED", "Kunde inte söka minnen.");
   }
 
+  const projects = input.project === undefined ? compactProjects(rows) : undefined;
   if (input.project !== undefined) {
     const project = input.project.normalize("NFKC").toLocaleLowerCase("sv-SE");
     rows = rows.filter(
@@ -578,10 +739,12 @@ export async function getContext(
         : 0;
       const categoryBoost =
         lexicalScore > 0 && cues.has(row.category) ? 8 : 0;
+      const categoryIntent =
+        terms.length === 0 && cues.has(row.category) ? 20 : 0;
       return {
         row,
         key: duplicateKey(row),
-        score: lexicalScore + categoryBoost,
+        score: lexicalScore + categoryBoost + categoryIntent,
       };
     })
     .filter(({ score }) => score > 0)
@@ -597,18 +760,25 @@ export async function getContext(
     (total, { key }) => total + (deduplicated.duplicateCounts.get(key) ?? 0),
     0,
   );
-  const relevantCount = ranked.length + duplicateOmitted;
-  const packedKeywords = outputKeywords(keywords, input.project, relevantCount);
+  const packedKeywords = outputKeywords(
+    keywords,
+    input.project,
+    projects,
+    duplicateOmitted,
+    ranked.length,
+  );
   const items: ContextItem[] = [];
   for (const { row } of ranked) {
     if (items.length >= CONTEXT_ITEM_LIMIT) break;
-    const item = contextItem(row);
+    const item = contextItem(row, terms);
     const next = [...items, item];
     const candidate = contextResult(
       packedKeywords,
       input.project,
+      projects,
       next,
-      relevantCount - next.length,
+      duplicateOmitted,
+      ranked.length - next.length,
     );
     if (JSON.stringify(candidate).length <= CONTEXT_JSON_LIMIT) {
       items.push(item);
@@ -619,8 +789,10 @@ export async function getContext(
     data: contextResult(
       packedKeywords,
       input.project,
+      projects,
       items,
-      relevantCount - items.length,
+      duplicateOmitted,
+      ranked.length - items.length,
     ),
   };
 }

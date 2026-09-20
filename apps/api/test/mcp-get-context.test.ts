@@ -94,7 +94,7 @@ describe("get_context prompt transports", () => {
     assert.match(healthRouteSrc, /promptTransports:\s*true/);
   });
 
-  it("returns compact items without full content, user id or timestamps", async () => {
+  it("returns compact marked items without full content or user ids", async () => {
     const memory = createMemoryApi(createInMemoryStore());
     const saved = await memory.saveMemory("user-a", {
       project: "Projekt A",
@@ -115,8 +115,11 @@ describe("get_context prompt transports", () => {
       category: "deadline",
       title: "Lanseringsdatum",
       snippet: "Vi lanserar 15 oktober 2026.",
+      updated_at: saved.data.updated_at,
+      source: "user_memory",
     });
     const json = JSON.stringify(result.data);
-    assert.doesNotMatch(json, /user_id|created_at|updated_at|"content":/);
+    assert.doesNotMatch(json, /user_id|created_at|"content":/);
+    assert.match(json, /updated_at/);
   });
 });

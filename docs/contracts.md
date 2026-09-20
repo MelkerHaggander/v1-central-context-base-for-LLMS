@@ -95,16 +95,22 @@ Ut:
       "project": "Projekt A",
       "category": "deadline",
       "title": "Lanseringsdatum",
-      "snippet": "Vi lanserar 15 oktober 2026."
+      "snippet": "Vi lanserar 15 oktober 2026.",
+      "updated_at": "2026-09-20T12:00:00Z",
+      "source": "user_memory"
     }
   ],
-  "omitted": 0
+  "omitted": 0,
+  "omitted_duplicate": 0,
+  "omitted_capped": 0
 }
 ```
 
-Tom `items` är giltig. Varje träff innehåller bara `id`, `project`, `category`, `title` och `snippet`; aldrig `user_id`, tidsstämplar eller fullt `content`. Högst 8 träffar returneras, varje `snippet` är högst 280 tecken och hela JSON-svaret är högst 3 500 tecken. `omitted` räknar relevanta träffar som inte fick plats.
+Tom `items` är giltig. Varje träff innehåller bara `id`, `project`, `category`, `title`, en matchcentrerad `snippet`, `updated_at` och `source: "user_memory"`; aldrig `user_id`, `created_at` eller fullt `content`. Tecknen `&` och `<` HTML-escapas i `snippet`. Högst 8 träffar returneras, varje `snippet` är högst 280 tecken och hela JSON-svaret är högst 3 500 tecken.
 
-Rankningen prioriterar titelträff över innehållsträff, därefter täckning av unika nyckelord, kategori-ledtrådar i prompten och senast uppdaterat som skiljeregel. Svenska böjningssuffix normaliseras lätt och en liten svensk/engelsk synonymtabell används för etablerade ord som `databas`/`database` och `lansering`/`launch`. Kategori-ledtrådar kan bara förstärka en rad som redan har en riktig lexikal träff; de räknas inte själva som innehållsträffar. Svaga träffar på enbart projektnamnet tas bort när prompten också innehåller sakord. Av minnen med samma `project`, `title` och `category` returneras bara det senast uppdaterade. Träffar med poäng 0 tas bort. `project` filtreras på hela namnet men skiftlägesokänsligt. Ogiltig eller tom prompt ger `INVALID_PROMPT`; lagringsfel ger `SEARCH_FAILED`.
+`omitted_duplicate` räknar äldre logiska dubbletter och `omitted_capped` relevanta unika träffar som inte fick plats; `omitted` är summan. När `project` saknas kan svaret dessutom innehålla högst åtta kompakta projektnamn i `projects`; det är bara en ledtråd och aldrig en lista över minnen.
+
+Rankningen prioriterar titelträff över innehållsträff, därefter täckning av unika nyckelord, kategori-ledtrådar i prompten och senast uppdaterat som skiljeregel. Korta heltal som `5` behålls för datumfrågor. Svenska böjningssuffix normaliseras lätt och sammansatt prefixmatchning kräver minst sju tecken. En liten svensk/engelsk synonymtabell används för etablerade ord som `databas`/`database` och `lansering`/`launch`. Kategori-ledtrådar förstärker lexikala träffar; en prompt som bara uttrycker tydlig kategoriavsikt, till exempel “Vilka deadlines har jag framför mig?”, får matcha den kategorin utan en LLM-inskickad `category`. Svaga träffar på enbart projektnamnet tas bort när prompten också innehåller sakord. Av minnen med samma `project`, `title` och `category` returneras bara det senast uppdaterade. Träffar med poäng 0 tas bort. `project` filtreras på hela namnet men skiftlägesokänsligt. Ogiltig eller tom prompt ger `INVALID_PROMPT`; lagringsfel ger `SEARCH_FAILED`.
 
 ### `update_memory`
 
