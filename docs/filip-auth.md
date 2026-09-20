@@ -9,7 +9,7 @@ Base URL: Vercel-preview för `alfredo/integrations` (Root Directory `apps/api`)
 | Inloggningsformulär | `POST /api/auth/login` body `{ "email", "password" }` |
 | App-skal / “är jag inloggad?” | `GET /api/auth/session` |
 | Logga ut | `POST /api/auth/logout` |
-| Minneslista / sök / filter | `GET /api/memories?project=&category=&query=&offset=` (`category=lesson` är Lärdom) |
+| Minneslista / sök / filter | `GET /api/memories?project=&category=&query=&offset=` (`category=lesson` is Lesson) |
 | Redigera minne | `PATCH /api/memories/:id` body `{ "project", "category", "title", "content" }` → uppdaterat minnesobjekt. Alla fält krävs. Cookie-session, inte MCP. |
 | Radera minne | `DELETE /api/memories/:id` → `{ "success": true }`. Finns **inte** som MCP-verktyg. Bara inloggad användare. |
 

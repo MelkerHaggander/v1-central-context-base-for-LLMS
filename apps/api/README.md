@@ -25,10 +25,10 @@ Samma Vercel-projekt (Root Directory `apps/api`) visar Filips UI och Alfredos AP
 
 | Sida | Väg |
 | --- | --- |
-| Inloggning (Filip) | `/` |
-| Minnen | `/dashboard` |
-| Anslut Claude | `/anslut` |
-| OAuth-godkännande | `/oauth/authorize` → post till `/oauth/approve` |
+| Sign in (Filip) | `/` |
+| Memories | `/dashboard` |
+| Connect | `/connect` (`/anslut` redirects here) |
+| OAuth approve | `/oauth/authorize` → POST `/oauth/approve` |
 
 | Metod | Sökväg | Kontrakt |
 | --- | --- | --- |

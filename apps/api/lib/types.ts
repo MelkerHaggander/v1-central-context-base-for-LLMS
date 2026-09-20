@@ -5,14 +5,14 @@
 export const CATEGORIES = ["fact", "decision", "goal", "deadline", "preference", "lesson"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-/** Svenska etiketter i dashboarden. Värdena mot API:t är alltid engelska gemener. */
+/** English labels in the dashboard. Wire values against the API stay lowercase English. */
 export const CATEGORY_LABELS: Record<Category, string> = {
-  fact: "Faktum",
-  decision: "Beslut",
-  goal: "Mål",
+  fact: "Fact",
+  decision: "Decision",
+  goal: "Goal",
   deadline: "Deadline",
-  preference: "Preferens",
-  lesson: "Lärdom",
+  preference: "Preference",
+  lesson: "Lesson",
 };
 
 export function isCategory(value: unknown): value is Category {

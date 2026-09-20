@@ -1,6 +1,6 @@
 "use client";
 
-import { MemoryList } from "@/components/MemoryList";
+import { GlobeView } from "@/components/GlobeView";
 import { SessionGate } from "@/components/SessionGate";
 import { TopBar } from "@/components/TopBar";
 
@@ -10,10 +10,9 @@ export default function DashboardPage() {
       {(user) => (
         <>
           <TopBar email={user.email} />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
-            <h1 className="mb-4 text-xl font-semibold">Dina minnen</h1>
-            <MemoryList key={user.id} userId={user.id} />
-          </main>
+          {/* key on the account: a different user gets a fresh globe, never a
+              frame of the previous account's dots. */}
+          <GlobeView key={user.id} user={user} />
         </>
       )}
     </SessionGate>

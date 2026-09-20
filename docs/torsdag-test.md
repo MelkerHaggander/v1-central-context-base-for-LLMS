@@ -320,7 +320,7 @@ await api.saveMemory(userId, input);
 2. Logga in som Konto A (samma mail som Claude).
 3. Be Claude spara (eller återanvänd) **Stack för V1** från [testexempel.md](testexempel.md). Notera `id` från MCP.
 4. Vänta högst 10 sekunder **eller** tryck uppdateringsknappen.
-5. Listan skall visa title `Stack för V1`, svensk etikett **Beslut** (inte `decision`), project `Projekt A`, samma `id` som MCP.
+5. Listan skall visa title `Stack för V1`, engelsk etikett **Decision** (inte `decision` som rått API-värde), project `Projekt A`, samma `id` som MCP.
 6. Sök i dashboarden på `TypeScript`. Radens content skall synas.
 7. Filter kategori Deadline skall visa Lanseringsdatum som **Deadline**, inte gömma den.
 8. Tom sök `finns-inte-xyz` i dashboarden: tom lista, inte mock.
@@ -374,7 +374,7 @@ await api.saveMemory(userId, input);
 1. Som Konto A, via Claude, spara de tre raderna i [testexempel.md](testexempel.md) om de inte redan finns.
 2. `GET /api/memories?project=Projekt%20A`: minst de tre titlarna `Lanseringsdatum`, `Stack för V1`, `Tre testkonton`.
 3. Senast uppdaterad först.
-4. Filips dashboard (om test 14 inte redan underkänd): samma tre titlar, svenska etiketter Deadline / Beslut / Faktum.
+4. Filips dashboard (om test 14 inte redan underkänd): samma tre titlar, engelska etiketter Deadline / Decision / Fact.
 
 **Lycka:** Tre rader, rätt etiketter hos Filip.
 **Underkänt:** Bara Alfredos testsida visar dem. Dashboard visar engelska nycklar. En title stavas om så sök `oktober` missar.
