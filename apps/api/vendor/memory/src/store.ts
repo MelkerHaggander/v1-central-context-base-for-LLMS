@@ -16,63 +16,160 @@ export const CONTEXT_SNIPPET_LIMIT = 280;
 export const CONTEXT_JSON_LIMIT = 3500;
 
 const STOP_WORDS = new Set([
-  "about",
   "after",
+  "about",
   "again",
+  "also",
   "alla",
   "allt",
-  "also",
+  "am",
   "and",
+  "använda",
+  "använder",
+  "använt",
   "are",
+  "as",
   "att",
   "av",
+  "bara",
+  "be",
   "before",
+  "been",
+  "being",
+  "berätta",
+  "brief",
+  "bör",
   "but",
+  "can",
+  "could",
+  "de",
   "den",
   "det",
+  "detta",
+  "did",
   "din",
   "dina",
   "dit",
+  "do",
+  "does",
+  "du",
+  "då",
+  "där",
   "eller",
   "en",
+  "er",
+  "era",
   "ett",
   "for",
+  "from",
+  "fråga",
   "från",
   "för",
+  "får",
+  "had",
+  "han",
   "har",
+  "has",
+  "have",
+  "he",
+  "hennes",
+  "här",
+  "hon",
+  "how",
   "hur",
+  "is",
+  "it",
+  "its",
   "inte",
   "jag",
+  "kort",
+  "kunde",
+  "later",
+  "me",
+  "mer",
+  "mest",
+  "mig",
   "kan",
+  "mine",
   "med",
   "men",
   "min",
   "mina",
   "mot",
-  "när",
+  "många",
+  "måste",
+  "my",
+  "mycket",
+  "någon",
+  "något",
+  "några",
+  "nu",
   "och",
+  "of",
+  "också",
   "om",
+  "on",
   "oss",
   "our",
+  "på",
+  "please",
+  "redan",
+  "sedan",
+  "she",
+  "short",
+  "should",
+  "sig",
+  "sin",
+  "sina",
+  "sitt",
   "ska",
+  "skall",
+  "skulle",
   "som",
+  "så",
+  "tell",
+  "than",
   "the",
   "their",
+  "them",
+  "then",
+  "they",
   "this",
   "till",
+  "to",
+  "under",
+  "upp",
+  "us",
+  "use",
+  "used",
+  "uses",
+  "using",
+  "ut",
+  "utan",
   "vad",
   "var",
-  "vi",
   "was",
+  "we",
   "what",
   "when",
   "where",
   "which",
   "who",
   "why",
+  "vi",
+  "vid",
+  "vilken",
+  "vill",
+  "will",
   "with",
+  "would",
+  "vår",
+  "våra",
+  "vårt",
   "you",
   "your",
+  "är",
+  "än",
   "över",
 ]);
 
@@ -95,10 +192,6 @@ const CATEGORY_CUES: Record<Category, Set<string>> = {
     "deadline",
     "deadlines",
     "due",
-    "förfallodatum",
-    "lansera",
-    "lansering",
-    "leverans",
     "när",
     "tidsfrist",
     "when",
@@ -122,6 +215,41 @@ const CATEGORY_CUES: Record<Category, Set<string>> = {
   ]),
 };
 
+const CATEGORY_CUE_WORDS = new Set(
+  Object.values(CATEGORY_CUES).flatMap((cues) => [...cues]),
+);
+
+const SYNONYM_GROUPS = [
+  ["databas", "database"],
+  ["lansera", "lansering", "launch"],
+] as const;
+
+const SWEDISH_SUFFIXES = [
+  "heterna",
+  "ornas",
+  "ernas",
+  "arnas",
+  "elser",
+  "heten",
+  "anden",
+  "andet",
+  "ande",
+  "ende",
+  "orna",
+  "erna",
+  "arna",
+  "ades",
+  "ade",
+  "ens",
+  "ets",
+  "ers",
+  "ats",
+  "ar",
+  "er",
+  "en",
+  "et",
+] as const;
+
 function normalizedTokens(text: string): string[] {
   return text
     .normalize("NFKC")
@@ -131,12 +259,46 @@ function normalizedTokens(text: string): string[] {
     .filter(Boolean);
 }
 
+function stemSwedishToken(token: string): string {
+  for (const suffix of SWEDISH_SUFFIXES) {
+    if (token.endsWith(suffix) && token.length - suffix.length >= 4) {
+      return token.slice(0, -suffix.length);
+    }
+  }
+  return token;
+}
+
+function keywordForms(keyword: string): Set<string> {
+  const stem = stemSwedishToken(keyword);
+  const synonyms = SYNONYM_GROUPS.find((group) =>
+    group.some((candidate) => stemSwedishToken(candidate) === stem),
+  );
+  return new Set([stem, ...(synonyms ?? []).map(stemSwedishToken)]);
+}
+
+function textStems(text: string): string[] {
+  return normalizedTokens(text).map(stemSwedishToken);
+}
+
+function formMatchesToken(form: string, token: string): boolean {
+  return form === token || (form.length >= 5 && token.startsWith(form));
+}
+
+function keywordMatches(forms: Set<string>, tokens: string[]): boolean {
+  return [...forms].some((form) =>
+    tokens.some((token) => formMatchesToken(form, token)),
+  );
+}
+
 export function extractKeywords(prompt: string): string[] {
   if (typeof prompt !== "string") return [];
   return [
     ...new Set(
       normalizedTokens(prompt).filter(
-        (token) => token.length >= 3 && !STOP_WORDS.has(token),
+        (token) =>
+          token.length >= 3 &&
+          !STOP_WORDS.has(token) &&
+          !CATEGORY_CUE_WORDS.has(token),
       ),
     ),
   ];
@@ -149,6 +311,42 @@ function categoryCues(prompt: string): Set<Category> {
       .filter(([, cues]) => [...cues].some((cue) => tokens.has(cue)))
       .map(([category]) => category),
   );
+}
+
+function duplicateKey(row: MemoryRecord): string {
+  return [
+    row.project.normalize("NFKC").toLocaleLowerCase("sv-SE"),
+    row.title.normalize("NFKC").toLocaleLowerCase("sv-SE"),
+    row.category,
+  ].join("\u0000");
+}
+
+function newestByIdentity(rows: MemoryRecord[]): {
+  rows: MemoryRecord[];
+  duplicateCounts: Map<string, number>;
+} {
+  const newest = new Map<string, MemoryRecord>();
+  const duplicateCounts = new Map<string, number>();
+
+  for (const row of rows) {
+    const key = duplicateKey(row);
+    const current = newest.get(key);
+    if (!current) {
+      newest.set(key, row);
+      duplicateCounts.set(key, 0);
+      continue;
+    }
+
+    duplicateCounts.set(key, (duplicateCounts.get(key) ?? 0) + 1);
+    if (
+      row.updated_at > current.updated_at ||
+      (row.updated_at === current.updated_at && row.id > current.id)
+    ) {
+      newest.set(key, row);
+    }
+  }
+
+  return { rows: [...newest.values()], duplicateCounts };
 }
 
 function snippet(content: string): string {
@@ -308,31 +506,65 @@ export async function getContext(
   }
 
   if (input.project !== undefined) {
-    rows = rows.filter((row) => row.project === input.project);
+    const project = input.project.normalize("NFKC").toLocaleLowerCase("sv-SE");
+    rows = rows.filter(
+      (row) =>
+        row.project.normalize("NFKC").toLocaleLowerCase("sv-SE") === project,
+    );
   }
 
   const keywords = extractKeywords(prompt);
   const cues = categoryCues(prompt);
-  const ranked = rows
+  const terms = keywords.map(keywordForms);
+  const deduplicated = newestByIdentity(rows);
+  const ranked = deduplicated.rows
     .map((row) => {
-      const title = row.title.toLocaleLowerCase("sv-SE");
-      const content = row.content.toLocaleLowerCase("sv-SE");
+      const title = textStems(row.title);
+      const content = textStems(row.content);
+      const project = textStems(row.project);
       let titleHits = 0;
       let contentHits = 0;
+      let projectHits = 0;
+      let nonEntityMatches = 0;
 
-      for (const keyword of keywords) {
-        if (title.includes(keyword)) {
+      const entityTerms = terms.map((forms) => keywordMatches(forms, project));
+      const hasNonEntityTerm = entityTerms.some((isEntity) => !isEntity);
+
+      for (const [index, forms] of terms.entries()) {
+        let matched = false;
+        if (keywordMatches(forms, title)) {
           titleHits += 1;
-        } else if (content.includes(keyword)) {
+          matched = true;
+        } else if (keywordMatches(forms, content)) {
           contentHits += 1;
+          matched = true;
+        } else if (entityTerms[index]) {
+          projectHits += 1;
+          matched = true;
+        }
+
+        if (matched && !entityTerms[index]) {
+          nonEntityMatches += 1;
         }
       }
 
-      const matches = titleHits + contentHits;
-      const coverage = keywords.length === 0 ? 0 : matches / keywords.length;
-      const categoryBoost = cues.has(row.category) ? 30 : 0;
-      const score = titleHits * 100 + contentHits * 20 + Math.round(coverage * 10) + categoryBoost;
-      return { row, score };
+      const matches = titleHits + contentHits + projectHits;
+      const coverage = terms.length === 0 ? 0 : matches / terms.length;
+      const hasRequiredContent = !hasNonEntityTerm || nonEntityMatches > 0;
+      const lexicalScore = hasRequiredContent
+        ? titleHits * 60 +
+          contentHits * 25 +
+          projectHits * 5 +
+          nonEntityMatches * 10 +
+          Math.round(coverage * 12)
+        : 0;
+      const categoryBoost =
+        lexicalScore > 0 && cues.has(row.category) ? 8 : 0;
+      return {
+        row,
+        key: duplicateKey(row),
+        score: lexicalScore + categoryBoost,
+      };
     })
     .filter(({ score }) => score > 0)
     .sort((a, b) => {
@@ -343,7 +575,12 @@ export async function getContext(
       return a.row.id.localeCompare(b.row.id);
     });
 
-  const packedKeywords = outputKeywords(keywords, input.project, ranked.length);
+  const duplicateOmitted = ranked.reduce(
+    (total, { key }) => total + (deduplicated.duplicateCounts.get(key) ?? 0),
+    0,
+  );
+  const relevantCount = ranked.length + duplicateOmitted;
+  const packedKeywords = outputKeywords(keywords, input.project, relevantCount);
   const items: ContextItem[] = [];
   for (const { row } of ranked) {
     if (items.length >= CONTEXT_ITEM_LIMIT) break;
@@ -353,7 +590,7 @@ export async function getContext(
       packedKeywords,
       input.project,
       next,
-      ranked.length - next.length,
+      relevantCount - next.length,
     );
     if (JSON.stringify(candidate).length <= CONTEXT_JSON_LIMIT) {
       items.push(item);
@@ -365,7 +602,7 @@ export async function getContext(
       packedKeywords,
       input.project,
       items,
-      ranked.length - items.length,
+      relevantCount - items.length,
     ),
   };
 }

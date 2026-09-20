@@ -104,7 +104,7 @@ Ut:
 
 Tom `items` är giltig. Varje träff innehåller bara `id`, `project`, `category`, `title` och `snippet`; aldrig `user_id`, tidsstämplar eller fullt `content`. Högst 8 träffar returneras, varje `snippet` är högst 280 tecken och hela JSON-svaret är högst 3 500 tecken. `omitted` räknar relevanta träffar som inte fick plats.
 
-Rankningen prioriterar titelträff över innehållsträff, därefter täckning av unika nyckelord, kategori-ledtrådar i prompten och senast uppdaterat som skiljeregel. Träffar med poäng 0 tas bort. `project` filtreras exakt och skiftlägeskänsligt. Ogiltig eller tom prompt ger `INVALID_PROMPT`; lagringsfel ger `SEARCH_FAILED`.
+Rankningen prioriterar titelträff över innehållsträff, därefter täckning av unika nyckelord, kategori-ledtrådar i prompten och senast uppdaterat som skiljeregel. Svenska böjningssuffix normaliseras lätt och en liten svensk/engelsk synonymtabell används för etablerade ord som `databas`/`database` och `lansering`/`launch`. Kategori-ledtrådar kan bara förstärka en rad som redan har en riktig lexikal träff; de räknas inte själva som innehållsträffar. Svaga träffar på enbart projektnamnet tas bort när prompten också innehåller sakord. Av minnen med samma `project`, `title` och `category` returneras bara det senast uppdaterade. Träffar med poäng 0 tas bort. `project` filtreras på hela namnet men skiftlägesokänsligt. Ogiltig eller tom prompt ger `INVALID_PROMPT`; lagringsfel ger `SEARCH_FAILED`.
 
 ### `search_memory`
 

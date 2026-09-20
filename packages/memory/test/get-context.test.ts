@@ -46,7 +46,7 @@ test("title hits outrank content hits and score-zero memories are excluded", asy
   ]);
 });
 
-test("project filtering is exact and case-sensitive", async () => {
+test("project filtering is case-insensitive", async () => {
   const memory = createMemoryApi(createInMemoryStore());
   await memory.saveMemory(USER_A, {
     project: "Projekt A",
@@ -65,27 +65,39 @@ test("project filtering is exact and case-sensitive", async () => {
   });
   assert.ok("data" in exact && "data" in wrongCase);
   assert.equal(exact.data.items.length, 1);
-  assert.deepEqual(wrongCase.data.items, []);
+  assert.equal(wrongCase.data.items.length, 1);
 });
 
-test("deadline prompt cue outranks a weak fact content hit", async () => {
+test("category cues boost lexical matches but never revive score-zero rows", async () => {
   const memory = createMemoryApi(createInMemoryStore());
   await memory.saveMemory(USER_A, {
     project: "Projekt A",
     category: "deadline",
-    title: "Leveransplan",
-    content: "Den femtonde oktober.",
+    title: "Milstolpe",
+    content: "Leveransplan för Projekt A.",
   });
   await memory.saveMemory(USER_A, {
     project: "Projekt A",
     category: "fact",
     title: "Ordlista",
-    content: "Deadline är ett engelskt låneord.",
+    content: "Leveransplan är ett sammansatt ord.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "Projekt A",
+    category: "deadline",
+    title: "Budgetdatum",
+    content: "Budgeten fastställs i oktober.",
   });
 
-  const result = await memory.getContext(USER_A, { prompt: "När är vår deadline?" });
+  const result = await memory.getContext(USER_A, {
+    prompt: "När är deadline för leveransplan?",
+  });
   assert.ok("data" in result);
   assert.equal(result.data.items[0]?.category, "deadline");
+  assert.deepEqual(result.data.items.map((item) => item.title), [
+    "Milstolpe",
+    "Ordlista",
+  ]);
 });
 
 test("score zero produces a valid empty items list", async () => {
@@ -101,6 +113,148 @@ test("score zero produces a valid empty items list", async () => {
   assert.ok("data" in result);
   assert.deepEqual(result.data.items, []);
   assert.equal(result.data.omitted, 0);
+});
+
+test("light Swedish stemming matches lanseringsdatumet to Lanseringsdatum", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Lanseringsdatum",
+    content: "Vi lanserar 15 oktober 2026.",
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "Vad är lanseringsdatumet?",
+  });
+  assert.ok("data" in result);
+  assert.deepEqual(result.data.items.map((item) => item.title), [
+    "Lanseringsdatum",
+  ]);
+});
+
+test("expanded stopwords do not retrieve unrelated category memories", async () => {
+  const keywords = extractKeywords(
+    "Hur skall jag söka kort sedan, och vilken väg får mig rätt?",
+  );
+  for (const stopword of ["hur", "skall", "kort", "sedan", "vilken", "får", "mig"]) {
+    assert.equal(keywords.includes(stopword), false, stopword);
+  }
+
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Lanseringsdatum",
+    content: "Vi lanserar 15 oktober 2026.",
+  });
+  const result = await memory.getContext(USER_A, {
+    prompt: "Hur skall jag söka kort sedan?",
+  });
+  assert.ok("data" in result);
+  assert.deepEqual(result.data.items, []);
+});
+
+test("launch synonym matches lansering without returning every deadline", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Lansering",
+    content: "Lansering sker i oktober.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "deadline",
+    title: "Budgetdatum",
+    content: "Budgeten fastställs i oktober.",
+  });
+
+  const result = await memory.getContext(USER_A, { prompt: "launch date" });
+  assert.ok("data" in result);
+  assert.deepEqual(result.data.keywords, ["launch"]);
+  assert.deepEqual(result.data.items.map((item) => item.title), ["Lansering"]);
+});
+
+test("content keywords beat same-project noise in Swedish and English", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "fact",
+    title: "Databas",
+    content: "Kaffekvarnen använder PostgreSQL.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "preference",
+    title: "Svarsspråk",
+    content: "Kaffekvarnen föredrar svenska svar.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "goal",
+    title: "Tillväxtmål",
+    content: "Kaffekvarnen ska nå 60 användare.",
+  });
+
+  for (const prompt of [
+    "Vilken databas använder Kaffekvarnen?",
+    "Which database does Kaffekvarnen use?",
+  ]) {
+    const result = await memory.getContext(USER_A, { prompt });
+    assert.ok("data" in result);
+    assert.deepEqual(result.data.items.map((item) => item.title), ["Databas"]);
+  }
+});
+
+test("case-insensitive project filter finds MCP-TEST as mcp-test", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Databas",
+    content: "PostgreSQL.",
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "databas",
+    project: "mcp-test",
+  });
+  assert.ok("data" in result);
+  assert.equal(result.data.items[0]?.project, "MCP-TEST");
+});
+
+test("near-duplicate identities keep only the newest memory", async () => {
+  let tick = Date.parse("2026-09-10T12:00:00Z");
+  const memory = createMemoryApi(
+    createInMemoryStore({
+      now: () => {
+        const date = new Date(tick);
+        tick += 1000;
+        return date;
+      },
+    }),
+  );
+  await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "goal",
+    title: "Användarmål",
+    content: "Kaffekvarnen ska nå 50 användare.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "goal",
+    title: "Användarmål",
+    content: "Kaffekvarnen ska nå 60 användare.",
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "Hur många användare har Kaffekvarnen?",
+  });
+  assert.ok("data" in result);
+  assert.equal(result.data.items.length, 1);
+  assert.match(result.data.items[0]?.snippet ?? "", /60 användare/);
+  assert.equal(result.data.omitted, 1);
 });
 
 test("clips snippets and packs matches into the response budget", async () => {
