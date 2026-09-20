@@ -76,3 +76,38 @@ test("trimmed identical save is a duplicate", async () => {
   assert.ok("data" in first && "data" in second);
   assert.equal(second.data.id, first.data.id);
 });
+
+test("same project category and title upserts newer content", async () => {
+  let tick = Date.parse("2026-09-10T12:00:00Z");
+  const memory = createMemoryApi(
+    createInMemoryStore({
+      now: () => {
+        const date = new Date(tick);
+        tick += 1000;
+        return date;
+      },
+    }),
+  );
+  const first = await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "goal",
+    title: "Användarmål",
+    content: "Målet är 1000 användare.",
+  });
+  const second = await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "goal",
+    title: "Användarmål",
+    content: "Målet är 2000 användare.",
+  });
+
+  assert.ok("data" in first && "data" in second);
+  assert.equal(second.data.id, first.data.id);
+  assert.equal(second.data.content, "Målet är 2000 användare.");
+  assert.ok(second.data.updated_at > first.data.updated_at);
+
+  const listed = await memory.searchMemory(USER_A, { project: "Kaffekvarnen" });
+  assert.ok("data" in listed);
+  assert.equal(listed.data.length, 1);
+  assert.equal(listed.data[0]?.content, "Målet är 2000 användare.");
+});

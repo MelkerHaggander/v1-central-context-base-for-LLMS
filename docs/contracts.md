@@ -76,7 +76,7 @@ In: `{ "project": string, "category": string, "title": string, "content": string
 Ut vid lycka: ett minnesobjekt som ovan.  
 Ut vid fel: `{ "error": { "code": string, "message": string } }` — får **aldrig** se ut som lyckad sparning.
 
-Identisk omsparning, alltså samma konto plus samma `project`, `category`, `title` och `content`, skapar ingen ny rad. Den returnerar befintlig rad som **lyckat** svar, med oförändrat `id` och oförändrat `updated_at`. Det är inte ett fel.
+`save_memory` använder konto plus trimmade `project`, `category` och `title` som identitet. Om samma identitet redan finns och `content` har ändrats uppdateras den befintliga raden med nytt innehåll och nytt `updated_at`; ingen andra rad skapas. En helt identisk omsparning returnerar befintlig rad som **lyckat** svar, med oförändrat `id` och oförändrat `updated_at`.
 
 ### `get_context`
 
@@ -106,25 +106,15 @@ Tom `items` är giltig. Varje träff innehåller bara `id`, `project`, `category
 
 Rankningen prioriterar titelträff över innehållsträff, därefter täckning av unika nyckelord, kategori-ledtrådar i prompten och senast uppdaterat som skiljeregel. Svenska böjningssuffix normaliseras lätt och en liten svensk/engelsk synonymtabell används för etablerade ord som `databas`/`database` och `lansering`/`launch`. Kategori-ledtrådar kan bara förstärka en rad som redan har en riktig lexikal träff; de räknas inte själva som innehållsträffar. Svaga träffar på enbart projektnamnet tas bort när prompten också innehåller sakord. Av minnen med samma `project`, `title` och `category` returneras bara det senast uppdaterade. Träffar med poäng 0 tas bort. `project` filtreras på hela namnet men skiftlägesokänsligt. Ogiltig eller tom prompt ger `INVALID_PROMPT`; lagringsfel ger `SEARCH_FAILED`.
 
-### `search_memory`
-
-In: `{ "project"?: string, "category"?: string, "query"?: string, "offset"?: number }`  
-Ut: lista av minnesobjekt, `updated_at` fallande. Tom lista är giltig, inte fel.  
-`query` söker i `title` och `content`.
-
-Detta verktyg är kvar för bakåtkompatibilitet men LLM-klienter ska inte använda det. De ska anropa `get_context` med hela användarprompten.
-
-Högst **50** minnen per anrop. `offset` hoppar över rader i samma sortering, så nästa sida hämtas med `offset: 50`. `offset` måste vara ett heltal 0 eller högre.
-
-`query` matchar delsträng och är skiftlägesokänsligt. Tecknen `%`, `_`, `,`, `(` och `)` tas bort ur `query` före sökning, och blir `query` tom efter det används inget textfilter alls. `project` och `category` matchar exakt och är skiftlägeskänsliga.
-
 ### `update_memory`
 
-In: `{ "id": string, "project": string, "category": string, "title": string, "content": string }`  
+In: `{ "id": string, "project": string, "category": string, "title": string, "content": string, "allow_project_change"?: boolean }`
 Ut vid lycka: uppdaterat minnesobjekt (`updated_at` nytt, `id` samma).  
 Ut vid fel (finns inte, tillhör annan användare, ogiltiga fält): error-objekt, aldrig ett “lyckat” minne.
 
-`id` måste vara ett UUID. Alla fält krävs, partiell uppdatering finns inte. `updated_at` sätts alltid om, även när inget fält faktiskt ändrats, och raden hamnar då först i sökresultatet. `category` får vara `lesson` när en befintlig lärdom ska ändras.
+`id` måste vara ett UUID och får inte vara nil-UUID `00000000-0000-0000-0000-000000000000`. Alla minnesfält krävs; partiell uppdatering finns inte. `updated_at` sätts alltid om, även när inget fält faktiskt ändrats, och raden hamnar då först i sökresultatet.
+
+Ett ändrat `project` avvisas med `PROJECT_CHANGE_REQUIRES_FLAG` om inte anropet uttryckligen skickar `allow_project_change: true`. Flaggan får bara skickas för ett avsiktligt projektbyte. Ett vanligt minne får inte ändras till `category: "lesson"` via `update_memory`; det ger `LESSON_CATEGORY_REQUIRES_TOOL`. En befintlig lärdom får fortsätta ha `category: "lesson"` när den uppdateras.
 
 Om raden inte finns, och om den tillhör ett annat konto, returneras **samma** fel med samma kod och samma text. Felet får inte avslöja om ett `id` existerar.
 
@@ -137,7 +127,18 @@ Ut vid fel: samma error-objekt som `save_memory`.
 
 Används bara för en återanvändbar lärdom från **denna** chatt (rättelse, metod som fungerade, misstag att inte upprepa, eller en regel användaren satte). Fakta, beslut, mål, deadlines och preferenser ska använda `save_memory`. Identisk omsparning beter sig som `save_memory`.
 
-### Dashboard-HTTP: radera (inte MCP)
+## Dashboard-HTTP (inte MCP)
+
+### Lista och filtrera
+
+`GET /api/memories` och `POST /api/mcp/search_memory` får användas av dashboarden och andra mänskliga gränssnitt, men `search_memory` finns **inte** i MCP:s `tools/list` eller `initialize.instructions`.
+
+In: `{ "project"?: string, "category"?: string, "query"?: string, "offset"?: number }`
+Ut: lista av minnesobjekt, `updated_at` fallande. Tom lista är giltig, inte fel. `query` söker i `title` och `content`.
+
+Högst **50** minnen per anrop. `offset` hoppar över rader i samma sortering, så nästa sida hämtas med `offset: 50`. `offset` måste vara ett heltal 0 eller högre. `query` matchar delsträng och är skiftlägesokänsligt. Tecknen `%`, `_`, `,`, `(` och `)` tas bort ur `query` före sökning, och blir `query` tom efter det används inget textfilter alls. `project` och `category` matchar exakt och är skiftlägeskänsliga.
+
+### Radera
 
 Radering finns bara mot den inloggade cookie-sessionen. Claude, ChatGPT och Grok har inget `delete_memory`. MCP-token kan inte radera.
 
@@ -148,7 +149,7 @@ Radering finns bara mot den inloggade cookie-sessionen. Claude, ChatGPT och Grok
 - Ogiltigt `id`: `{ "error": { "code": "INVALID_ID", "message": "id måste vara ett UUID." } }`, 400
 - Saknas eller tillhör annat konto: samma `NOT_FOUND` som `update_memory`, 404
 
-Redigera från dashboarden använder samma `PATCH /api/memories/:id` som `update_memory`. Alla fält krävs.
+Redigera från dashboarden använder `PATCH /api/memories/:id` med samma projektbytesflagga och lektionsregler som `update_memory`. Alla minnesfält krävs.
 
 ## Hjärnans funktioner (Melker) — samma kontrakt
 

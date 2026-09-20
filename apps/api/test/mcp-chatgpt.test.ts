@@ -14,10 +14,10 @@ describe("ChatGPT mixed-auth metadata", () => {
       jsonrpc: "2.0",
       id: 1,
       result: {
-        tools: [{ name: "search_memory", description: "sök" }],
+        tools: [{ name: "get_context", description: "hämta kontext" }],
       },
     }) as { result: { tools: Array<{ name: string; securitySchemes: unknown }> } };
-    assert.equal(injected.result.tools[0].name, "search_memory");
+    assert.equal(injected.result.tools[0].name, "get_context");
     assert.deepEqual(injected.result.tools[0].securitySchemes, CHATGPT_OAUTH_SCHEMES);
   });
 

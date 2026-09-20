@@ -7,6 +7,7 @@ import type {
   MemoryRecord,
   Result,
   SearchInput,
+  UpdateMemoryInput,
 } from "./types";
 import { fail, validateMemoryId, validateMemoryInput, validateSearchInput } from "./validate";
 
@@ -446,6 +447,23 @@ export async function saveMemory(
   if (inserted.kind === "duplicate") {
     const existing = await store.findIdentical(userId, parsed.data);
     if (existing) return { data: existing };
+
+    let rows: MemoryRecord[];
+    try {
+      rows = await store.listByUser(userId);
+    } catch {
+      return fail("SAVE_FAILED", "Kunde inte spara minnet.");
+    }
+    const nearDuplicate = rows.find(
+      (row) =>
+        row.project === parsed.data.project &&
+        row.category === parsed.data.category &&
+        row.title === parsed.data.title,
+    );
+    if (nearDuplicate) {
+      const updated = await store.update(userId, nearDuplicate.id, parsed.data);
+      if (updated.kind === "updated") return { data: updated.row };
+    }
   }
   return fail("SAVE_FAILED", "Kunde inte spara minnet.");
 }
@@ -609,7 +627,7 @@ export async function getContext(
 
 export async function updateMemory(
   userId: string,
-  input: MemoryInput & { id: string },
+  input: UpdateMemoryInput,
   store: MemoryStore,
 ): Promise<Result<MemoryRecord>> {
   const idCheck = validateMemoryId(input.id);
@@ -617,6 +635,33 @@ export async function updateMemory(
 
   const parsed = validateMemoryInput(input);
   if ("error" in parsed) return parsed;
+
+  let existing: MemoryRecord | undefined;
+  try {
+    existing = (await store.listByUser(userId)).find(
+      (row) => row.id === idCheck.data,
+    );
+  } catch {
+    return fail("UPDATE_FAILED", "Kunde inte uppdatera minnet.");
+  }
+  if (!existing) {
+    return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
+  }
+  if (
+    existing.project !== parsed.data.project &&
+    input.allow_project_change !== true
+  ) {
+    return fail(
+      "PROJECT_CHANGE_REQUIRES_FLAG",
+      "Projektbyte kräver allow_project_change: true.",
+    );
+  }
+  if (parsed.data.category === "lesson" && existing.category !== "lesson") {
+    return fail(
+      "LESSON_CATEGORY_REQUIRES_TOOL",
+      "Ett vanligt minne kan inte ändras till lesson; använd lesson_memory.",
+    );
+  }
 
   const updated = await store.update(userId, idCheck.data, parsed.data);
   if (updated.kind === "updated") {
@@ -651,7 +696,7 @@ export function createMemoryApi(store: MemoryStore) {
     saveMemory: (userId: string, input: MemoryInput) => saveMemory(userId, input, store),
     searchMemory: (userId: string, input: SearchInput) => searchMemory(userId, input, store),
     getContext: (userId: string, input: ContextInput) => getContext(userId, input, store),
-    updateMemory: (userId: string, input: MemoryInput & { id: string }) =>
+    updateMemory: (userId: string, input: UpdateMemoryInput) =>
       updateMemory(userId, input, store),
     deleteMemory: (userId: string, id: string) => deleteMemory(userId, id, store),
     saveLesson: (

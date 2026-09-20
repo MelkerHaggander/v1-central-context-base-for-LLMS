@@ -26,12 +26,18 @@ function asClient(row: StoredRow): MemoryRecord {
   };
 }
 
-function sameIdentity(row: StoredRow, userId: string, fields: NormalizedMemoryInput): boolean {
+function sameKey(row: StoredRow, userId: string, fields: NormalizedMemoryInput): boolean {
   return (
     row.user_id === userId &&
     row.project === fields.project &&
     row.category === fields.category &&
-    row.title === fields.title &&
+    row.title === fields.title
+  );
+}
+
+function sameIdentity(row: StoredRow, userId: string, fields: NormalizedMemoryInput): boolean {
+  return (
+    sameKey(row, userId, fields) &&
     contentFingerprint(row.content) === contentFingerprint(fields.content)
   );
 }
@@ -43,7 +49,7 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): MemoryS
 
   return {
     async insert(userId, fields) {
-      if (rows.some((row) => sameIdentity(row, userId, fields))) {
+      if (rows.some((row) => sameKey(row, userId, fields))) {
         return { kind: "duplicate" };
       }
       const timestamp = toIso(now());
@@ -71,7 +77,7 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): MemoryS
       if (!row) return { kind: "missing" };
       if (
         rows.some(
-          (candidate) => candidate.id !== memoryId && sameIdentity(candidate, userId, fields),
+          (candidate) => candidate.id !== memoryId && sameKey(candidate, userId, fields),
         )
       ) {
         return { kind: "failed", code: "UPDATE_FAILED", message: "Kunde inte uppdatera minnet." };

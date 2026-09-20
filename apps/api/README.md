@@ -37,7 +37,8 @@ Samma Vercel-projekt (Root Directory `apps/api`) visar Filips UI och Alfredos AP
 | POST | `/api/auth/logout` | `{ data: { success: true } }` |
 | POST | `/api/memories` och `/api/mcp/save_memory` | `save_memory` |
 | POST | `/api/mcp/lesson_memory` | `lesson_memory` (alltid `category` `lesson`) |
-| GET | `/api/memories` och POST `/api/mcp/search_memory` | `search_memory` |
+| POST | `/api/mcp/get_context` | Samma kompakta JSON som MCP-verktyget `get_context` |
+| GET | `/api/memories` och POST `/api/mcp/search_memory` | Dashboard-listning/filter, **inte** MCP-verktyg |
 | PATCH | `/api/memories/:id` och POST `/api/mcp/update_memory` | `update_memory` |
 | DELETE | `/api/memories/:id` | Radera eget minne. Cookie-session. **Inte** MCP. |
 | GET | `/api/mcp` (Claude) | Fjärr-MCP, fyra verktyg, OAuth. Token går inte ut. |
@@ -74,14 +75,14 @@ Fyra verktyg, inga fler:
 | Verktyg | In |
 | --- | --- |
 | `save_memory` | `project`, `category` (`fact`/`decision`/`goal`/`deadline`/`preference`), `title`, `content` |
-| `search_memory` | `project?`, `category?` (även `lesson`), `query?`, `offset?` |
-| `update_memory` | `id`, `project`, `category` (även `lesson`), `title`, `content` |
+| `get_context` | `prompt`, `project?` |
+| `update_memory` | `id`, `project`, `category` (även befintlig `lesson`), `title`, `content`, `allow_project_change?` |
 | `lesson_memory` | `project`, `title`, `content` — servern sätter `category` `lesson` |
 
 - Ägare = OAuth/inloggning, **aldrig** ett user-id Claude skickar.
-- `save_memory` sätter `id` (UUID), `created_at`, `updated_at`.
-- `search_memory`: textsök i title/content, filter, `updated_at` desc.
-- `update_memory`: 404/forbidden om fel konto eller saknas; annars samma `id` och ny `updated_at`.
+- `save_memory` uppdaterar samma `project` + `category` + `title`, annars skapas `id` (UUID).
+- `get_context` extraherar och rankar kompakt kontext från hela användarprompten.
+- `update_memory`: 404/forbidden om fel konto eller saknas; projektbyte kräver `allow_project_change: true`.
 - Fel: `{ "error": { "code", "message" } }`. **Aldrig** ett minnesobjekt när det misslyckades.
 
 Tills Melker är inkopplad: returnera förutbestämda svar som **bit för bit** matchar testexemplet (så Filip kan sikta på samma form).

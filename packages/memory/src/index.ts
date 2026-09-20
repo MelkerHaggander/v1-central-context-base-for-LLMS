@@ -3,6 +3,7 @@ export {
   type Category,
   type MemoryRecord,
   type MemoryInput,
+  type UpdateMemoryInput,
   type SearchInput,
   type ContextInput,
   type ContextItem,

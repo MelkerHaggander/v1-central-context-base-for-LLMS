@@ -26,6 +26,11 @@ export type MemoryInput = {
   content: string;
 };
 
+export type UpdateMemoryInput = MemoryInput & {
+  id: string;
+  allow_project_change?: boolean;
+};
+
 export type SearchInput = {
   project?: string;
   category?: string;

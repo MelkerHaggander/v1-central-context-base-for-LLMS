@@ -116,7 +116,7 @@ describe("Grok MCP OAuth challenge", () => {
     assert.equal(
       shouldChallengeMcpOAuth(
         req({ method: "POST", headers: { "user-agent": "ChatGPT-User" } }),
-        { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "search_memory" } },
+        { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_context" } },
       ),
       false,
     );
@@ -125,7 +125,7 @@ describe("Grok MCP OAuth challenge", () => {
         jsonrpc: "2.0",
         id: 3,
         method: "tools/call",
-        params: { name: "search_memory" },
+        params: { name: "get_context" },
       }),
       true,
     );
@@ -142,7 +142,7 @@ describe("Grok MCP OAuth challenge", () => {
     assert.equal(hasBearerToken(req()), false);
     assert.equal(hasBearerToken(req({ headers: { authorization: "Bearer tok" } })), true);
     assert.equal(
-      isToolsCallBody({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "search_memory" } }),
+      isToolsCallBody({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_context" } }),
       true,
     );
     assert.equal(isToolsCallBody({ jsonrpc: "2.0", id: 2, method: "tools/list" }), false);

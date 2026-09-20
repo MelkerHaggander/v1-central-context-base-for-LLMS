@@ -6,7 +6,6 @@ export const MEMORY_INSTRUCTIONS = `This MCP is the persistent memory layer for 
 
 Tools, and only these:
 - get_context: retrieve ranked, compact memories from the full user prompt
-- search_memory: legacy compatibility only; do not use it
 - save_memory: create a new memory (facts, decisions, goals, deadlines, preferences)
 - update_memory: change an existing memory by id
 - lesson_memory: store a reusable lesson that should influence future work
@@ -37,8 +36,6 @@ Pass the complete user message unchanged in prompt. Do not extract keywords,
 invent a query, send category or offset, or make multiple searches. The tool
 extracts keywords, applies category cues, ranks matches and enforces the
 response budget.
-
-Do not use search_memory. It remains registered only for legacy compatibility.
 
 Do not ask the user to repeat information before calling get_context.
 
@@ -87,6 +84,10 @@ future conversation.
 Do not create a new memory when the information already exists and should
 instead be updated.
 
+save_memory updates the existing row when project, category and title match.
+Use the same stable title for the same subject so corrected content replaces
+the prior value instead of creating a near-duplicate.
+
 Avoid storing trivial conversational details, temporary information with no
 future value, unsupported assumptions, or duplicate memories.
 
@@ -127,6 +128,14 @@ state unambiguous.
 
 If an existing lesson changed, use update_memory with that id and category
 "lesson". Do not create a duplicate.
+
+Never change project in update_memory unless the user explicitly asked to
+move that memory. Only for an explicit move, send allow_project_change: true.
+Otherwise omit allow_project_change.
+
+Never change an ordinary memory's category to "lesson" with update_memory.
+Create lessons with lesson_memory. update_memory may keep category "lesson"
+only when updating an existing lesson.
 
 4. USE MEMORY CONTINUOUSLY
 Memory is not only for explicit requests such as "remember this."

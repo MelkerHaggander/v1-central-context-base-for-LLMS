@@ -6,13 +6,21 @@
  * Lagringen är per serverprocess. Startar om vid omstart. Det räcker för mock.
  */
 import { randomUUID } from "node:crypto";
-import { CATEGORIES, PAGE_SIZE, type Memory, type MemoryInput, type SearchInput } from "../types";
+import {
+  CATEGORIES,
+  PAGE_SIZE,
+  type Memory,
+  type MemoryInput,
+  type SearchInput,
+  type UpdateMemoryInput,
+} from "../types";
 
 type Row = Memory & { user_id: string };
 type Fail = { error: { code: string; message: string } };
 type Result<T> = { data: T } | Fail;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 export function fail(code: string, message: string): Fail {
   return { error: { code, message } };
@@ -80,7 +88,9 @@ export function validateSearchInput(input: SearchInput) {
 }
 
 export function validateMemoryId(id: string) {
-  if (!UUID_RE.test(id)) return fail("INVALID_ID", "id måste vara ett UUID.");
+  if (id === NIL_UUID || !UUID_RE.test(id)) {
+    return fail("INVALID_ID", "id måste vara ett UUID.");
+  }
   return { data: id };
 }
 
@@ -103,16 +113,20 @@ export class MockMemoryStore {
     if ("error" in parsed) return parsed;
     const f = parsed.data;
 
-    const identical = this.rows.find(
+    const existing = this.rows.find(
       (r) =>
         r.user_id === userId &&
         r.project === f.project &&
         r.category === f.category &&
-        r.title === f.title &&
-        r.content === f.content,
+        r.title === f.title,
     );
     // Identisk omsparning är lycka: samma id, samma updated_at.
-    if (identical) return { data: strip(identical) };
+    if (existing?.content === f.content) return { data: strip(existing) };
+    if (existing) {
+      existing.content = f.content;
+      existing.updated_at = toIso(new Date());
+      return { data: strip(existing) };
+    }
 
     const now = toIso(new Date());
     const row: Row = { id: randomUUID(), user_id: userId, ...f, created_at: now, updated_at: now };
@@ -143,7 +157,7 @@ export class MockMemoryStore {
     return { data: rows.slice(p.offset, p.offset + PAGE_SIZE).map(strip) };
   }
 
-  updateMemory(userId: string, input: MemoryInput & { id: string }): Result<Memory> {
+  updateMemory(userId: string, input: UpdateMemoryInput): Result<Memory> {
     const idCheck = validateMemoryId(input.id);
     if ("error" in idCheck) return idCheck;
     const parsed = validateMemoryInput(input);
@@ -152,6 +166,18 @@ export class MockMemoryStore {
     // Saknad rad och annan ägare ger samma fel. Avslöjar inte om id finns.
     const row = this.rows.find((r) => r.id === idCheck.data && r.user_id === userId);
     if (!row) return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
+    if (row.project !== parsed.data.project && input.allow_project_change !== true) {
+      return fail(
+        "PROJECT_CHANGE_REQUIRES_FLAG",
+        "Projektbyte kräver allow_project_change: true.",
+      );
+    }
+    if (parsed.data.category === "lesson" && row.category !== "lesson") {
+      return fail(
+        "LESSON_CATEGORY_REQUIRES_TOOL",
+        "Ett vanligt minne kan inte ändras till lesson; använd lesson_memory.",
+      );
+    }
 
     Object.assign(row, parsed.data, { updated_at: toIso(new Date()) });
     return { data: strip(row) };

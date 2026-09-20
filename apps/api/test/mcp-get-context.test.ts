@@ -15,6 +15,10 @@ const httpRouteSrc = readFileSync(
   join(__dirname, "../app/api/mcp/get_context/route.ts"),
   "utf8",
 );
+const updateHttpRouteSrc = readFileSync(
+  join(__dirname, "../app/api/mcp/update_memory/route.ts"),
+  "utf8",
+);
 const healthRouteSrc = readFileSync(join(__dirname, "../app/api/health/route.ts"), "utf8");
 
 describe("get_context prompt transports", () => {
@@ -29,12 +33,9 @@ describe("get_context prompt transports", () => {
     assert.match(registration, /\.getContext\(userId, input\)/);
   });
 
-  it("keeps search_memory registered with a legacy-only description", () => {
-    assert.match(mcpRouteSrc, /server\.tool\(\s*"search_memory"/);
-    assert.match(
-      mcpRouteSrc,
-      /Legacy tool\. Do not use; call get_context with the full user prompt\./,
-    );
+  it("removes search_memory from the MCP tool list", () => {
+    assert.doesNotMatch(mcpRouteSrc, /server\.tool\(\s*"search_memory"/);
+    assert.equal(mcpRouteSrc.match(/server\.tool\(/g)?.length, 4);
   });
 
   it("keeps get_context visible in ChatGPT's public mixed-auth tool list", () => {
@@ -51,7 +52,7 @@ describe("get_context prompt transports", () => {
     assert.deepEqual(body.result.tools[0]?.securitySchemes, CHATGPT_OAUTH_SCHEMES);
   });
 
-  it("gives unauthenticated get_context calls the same challenge as legacy search", () => {
+  it("gives unauthenticated get_context calls the standard memory challenge", () => {
     const request = new Request("https://mcp.example.test/api/mcp", {
       method: "POST",
     });
@@ -63,9 +64,25 @@ describe("get_context prompt transports", () => {
     });
     assert.equal(
       shouldChallengeMcpOAuth(request, call("get_context")),
-      shouldChallengeMcpOAuth(request, call("search_memory")),
+      shouldChallengeMcpOAuth(request, call("save_memory")),
     );
     assert.equal(shouldChallengeMcpOAuth(request, call("get_context")), true);
+  });
+
+  it("guards nil ids and silent project moves in update_memory", () => {
+    assert.match(mcpRouteSrc, /id:\s*MEMORY_ID_SCHEMA/);
+    assert.match(
+      mcpRouteSrc,
+      /\.regex\(MEMORY_ID_RE, \{ message: "INVALID_ID" \}\)/,
+    );
+    assert.match(
+      mcpRouteSrc,
+      /allow_project_change:\s*z\.boolean\(\)\.optional\(\)/,
+    );
+    assert.match(
+      updateHttpRouteSrc,
+      /allow_project_change:\s*body\.allow_project_change === true/,
+    );
   });
 
   it("uses the same memory result for MCP and HTTP and advertises health support", () => {

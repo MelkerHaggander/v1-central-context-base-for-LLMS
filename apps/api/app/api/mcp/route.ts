@@ -35,6 +35,11 @@ const WRITE_TOOL = {
 
 const SAVE_CATEGORIES = ["fact", "decision", "goal", "deadline", "preference"] as const;
 const ALL_CATEGORIES = ["fact", "decision", "goal", "deadline", "preference", "lesson"] as const;
+const MEMORY_ID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+const MEMORY_ID_SCHEMA = z
+  .string()
+  .regex(MEMORY_ID_RE, { message: "INVALID_ID" });
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -124,27 +129,15 @@ const handler = createMcpHandler(
     );
 
     server.tool(
-      "search_memory",
-      "Legacy tool. Do not use; call get_context with the full user prompt.",
-      {
-        project: z.string().max(100).optional(),
-        category: z.enum(ALL_CATEGORIES).optional(),
-        query: z.string().optional(),
-        offset: z.number().int().min(0).optional(),
-      },
-      READ_TOOL,
-      async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).searchMemory(userId, input)),
-    );
-
-    server.tool(
       "update_memory",
-      "Uppdatera ett befintligt minne som tillhör den inloggade användaren. Use this when an existing memory has clearly changed, instead of creating a duplicate.",
+      "Uppdatera ett befintligt minne som tillhör den inloggade användaren. Use this when an existing memory has clearly changed. Set allow_project_change true only when the user explicitly moves the memory to another project.",
       {
-        id: z.string().uuid(),
+        id: MEMORY_ID_SCHEMA,
         project: z.string().min(1).max(100),
         category: z.enum(ALL_CATEGORIES),
         title: z.string().min(1).max(150),
         content: z.string().min(1).max(10_000),
+        allow_project_change: z.boolean().optional(),
       },
       WRITE_TOOL,
       async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).updateMemory(userId, input)),

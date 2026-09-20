@@ -2,6 +2,7 @@ import { CATEGORIES, type MemoryInput, type SearchInput } from "./types";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 export function fail(code: string, message: string) {
   return { error: { code, message } } as const;
@@ -69,7 +70,7 @@ export function validateSearchInput(input: SearchInput) {
 }
 
 export function validateMemoryId(id: string) {
-  if (!UUID_RE.test(id)) {
+  if (id === NIL_UUID || !UUID_RE.test(id)) {
     return fail("INVALID_ID", "id måste vara ett UUID.");
   }
   return { data: id };

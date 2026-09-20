@@ -121,23 +121,81 @@ test("update keeps id bumps updated_at", async () => {
   assert.equal(listed.data[0]?.content, UPDATED_DEADLINE_CONTENT);
 });
 
+test("update rejects silent project moves and allows an explicit flag", async () => {
+  const memory = api();
+  const saved = await memory.saveMemory(USER_A, DEADLINE);
+  assert.ok("data" in saved);
+
+  const rejected = await memory.updateMemory(USER_A, {
+    id: saved.data.id,
+    ...DEADLINE,
+    project: "Projekt B",
+  });
+  assert.ok("error" in rejected);
+  assert.equal(rejected.error.code, "PROJECT_CHANGE_REQUIRES_FLAG");
+  assert.equal(
+    rejected.error.message,
+    "Projektbyte kräver allow_project_change: true.",
+  );
+
+  const allowed = await memory.updateMemory(USER_A, {
+    id: saved.data.id,
+    ...DEADLINE,
+    project: "Projekt B",
+    allow_project_change: true,
+  });
+  assert.ok("data" in allowed);
+  assert.equal(allowed.data.project, "Projekt B");
+});
+
+test("ordinary memories cannot become lessons through update_memory", async () => {
+  const memory = api();
+  const fact = await memory.saveMemory(USER_A, FACT);
+  assert.ok("data" in fact);
+
+  const rejected = await memory.updateMemory(USER_A, {
+    id: fact.data.id,
+    ...FACT,
+    category: "lesson",
+  });
+  assert.ok("error" in rejected);
+  assert.equal(rejected.error.code, "LESSON_CATEGORY_REQUIRES_TOOL");
+  assert.equal(
+    rejected.error.message,
+    "Ett vanligt minne kan inte ändras till lesson; använd lesson_memory.",
+  );
+
+  const lesson = await memory.saveLesson(USER_A, {
+    project: "Projekt A",
+    title: "Återanvänd testdata",
+    content: "Återanvänd testdata för deterministiska tester.",
+  });
+  assert.ok("data" in lesson);
+  const updated = await memory.updateMemory(USER_A, {
+    id: lesson.data.id,
+    project: lesson.data.project,
+    category: "lesson",
+    title: lesson.data.title,
+    content: "Återanvänd testdata för snabba och deterministiska tester.",
+  });
+  assert.ok("data" in updated);
+  assert.equal(updated.data.category, "lesson");
+});
+
 test("update failure is UPDATE_FAILED", async () => {
+  const store = createInMemoryStore();
+  const setup = createMemoryApi(store);
+  const saved = await setup.saveMemory(USER_A, DEADLINE);
+  assert.ok("data" in saved);
+
   const memory = createMemoryApi({
-    async insert() {
-      return { kind: "failed", code: "SAVE_FAILED", message: "Kunde inte spara minnet." };
-    },
-    async findIdentical() {
-      return null;
-    },
+    ...store,
     async update() {
       return { kind: "failed", code: "UPDATE_FAILED", message: "Kunde inte uppdatera minnet." };
     },
-    async listByUser() {
-      return [];
-    },
   });
   const result = await memory.updateMemory(USER_A, {
-    id: "550e8400-e29b-41d4-a716-446655440000",
+    id: saved.data.id,
     ...DEADLINE,
   });
   assert.ok("error" in result);

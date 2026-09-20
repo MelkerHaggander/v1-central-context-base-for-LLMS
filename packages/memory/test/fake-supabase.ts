@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { contentFingerprint } from "../src/in-memory";
 import type { MemoryRecord } from "../src/types";
 
 export type FakeStoredRow = MemoryRecord & { user_id: string };
@@ -50,14 +49,12 @@ function identityKey(userId: string, fields: {
   project: string;
   category: string;
   title: string;
-  content: string;
 }): string {
   return [
     userId,
     fields.project,
     fields.category,
     fields.title,
-    contentFingerprint(fields.content),
   ].join("\0");
 }
 
@@ -140,7 +137,7 @@ class MemoriesQuery {
     const category = String(fields.category ?? "");
     const title = String(fields.title ?? "");
     const content = String(fields.content ?? "");
-    const key = identityKey(this.ctx.userId, { project, category, title, content });
+    const key = identityKey(this.ctx.userId, { project, category, title });
 
     if (this.ctx.rows.some((row) => identityKey(row.user_id, row) === key)) {
       return {

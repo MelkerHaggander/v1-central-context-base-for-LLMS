@@ -23,7 +23,7 @@ describe("ChatGPT public MCP handshake", () => {
     assert.equal(
       isPublicMcpBody([
         { jsonrpc: "2.0", id: 1, method: "tools/list" },
-        { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "search_memory" } },
+        { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "get_context" } },
       ]),
       false,
     );
@@ -51,7 +51,7 @@ describe("ChatGPT public MCP handshake", () => {
     const req = new Request("https://example.test/api/mcp", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_memory" } }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_context" } }),
     });
     assert.equal(await isPublicMcpHandshake(req), false);
   });

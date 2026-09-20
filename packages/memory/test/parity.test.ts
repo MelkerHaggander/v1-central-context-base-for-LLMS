@@ -174,6 +174,70 @@ test("in-memory and fake supabase return the same vector", async () => {
   );
 });
 
+test("near-duplicate save upserts content on both stores", async () => {
+  async function upsert(harness: Harness) {
+    const first = await harness.a.saveMemory(USER_A, {
+      project: "Kaffekvarnen",
+      category: "goal",
+      title: "Användarmål",
+      content: "Målet är 1000 användare.",
+    });
+    const second = await harness.a.saveMemory(USER_A, {
+      project: "Kaffekvarnen",
+      category: "goal",
+      title: "Användarmål",
+      content: "Målet är 2000 användare.",
+    });
+    const listed = await harness.a.searchMemory(USER_A, {
+      project: "Kaffekvarnen",
+    });
+    return { first, second, listed };
+  }
+
+  const memory = await upsert(memoryHarness());
+  const supabase = await upsert(supabaseHarness());
+  assert.deepEqual(supabase, memory);
+  assert.ok("data" in memory.first && "data" in memory.second);
+  assert.equal(memory.second.data.id, memory.first.data.id);
+  assert.equal(memory.second.data.content, "Målet är 2000 användare.");
+  assert.ok("data" in memory.listed);
+  assert.equal(memory.listed.data.length, 1);
+});
+
+test("project and lesson update guards match on both stores", async () => {
+  async function guardedUpdates(harness: Harness) {
+    const saved = await harness.a.saveMemory(USER_A, FACT);
+    assert.ok("data" in saved);
+    const projectRejected = await harness.a.updateMemory(USER_A, {
+      id: saved.data.id,
+      ...FACT,
+      project: "Projekt B",
+    });
+    const lessonRejected = await harness.a.updateMemory(USER_A, {
+      id: saved.data.id,
+      ...FACT,
+      category: "lesson",
+    });
+    const projectAllowed = await harness.a.updateMemory(USER_A, {
+      id: saved.data.id,
+      ...FACT,
+      project: "Projekt B",
+      allow_project_change: true,
+    });
+    return { projectRejected, lessonRejected, projectAllowed };
+  }
+
+  const memory = await guardedUpdates(memoryHarness());
+  const supabase = await guardedUpdates(supabaseHarness());
+  assert.deepEqual(supabase, memory);
+  assert.ok("error" in memory.projectRejected);
+  assert.equal(memory.projectRejected.error.code, "PROJECT_CHANGE_REQUIRES_FLAG");
+  assert.ok("error" in memory.lessonRejected);
+  assert.equal(memory.lessonRejected.error.code, "LESSON_CATEGORY_REQUIRES_TOOL");
+  assert.ok("data" in memory.projectAllowed);
+  assert.equal(memory.projectAllowed.data.project, "Projekt B");
+});
+
 test("update into another identical row is UPDATE_FAILED on both stores", async () => {
   async function collide(harness: Harness) {
     const first = await harness.a.saveMemory(USER_A, DEADLINE);
@@ -233,6 +297,9 @@ test("adapter maps insert 23505 then missing lookup to SAVE_FAILED", async () =>
     async findIdentical() {
       return null;
     },
+    async listByUser() {
+      return [];
+    },
   });
   const result = await api.saveMemory(USER_A, DEADLINE);
   assert.ok("error" in result);
@@ -254,11 +321,19 @@ test("adapter IO failures keep Alfredo codes", async () => {
   assert.ok("error" in search);
   assert.equal(search.error.code, "SEARCH_FAILED");
 
+  const updateRows: FakeStoredRow[] = [];
+  const updateSetup = createMemoryApi(
+    createSupabaseStore(createFakeSupabase({ userId: USER_A, rows: updateRows })),
+  );
+  const updateSaved = await updateSetup.saveMemory(USER_A, DEADLINE);
+  assert.ok("data" in updateSaved);
   const updateApi = createMemoryApi(
-    createSupabaseStore(createFakeSupabase({ userId: USER_A, failUpdate: true })),
+    createSupabaseStore(
+      createFakeSupabase({ userId: USER_A, rows: updateRows, failUpdate: true }),
+    ),
   );
   const update = await updateApi.updateMemory(USER_A, {
-    id: "550e8400-e29b-41d4-a716-446655440000",
+    id: updateSaved.data.id,
     ...DEADLINE,
   });
   assert.ok("error" in update);

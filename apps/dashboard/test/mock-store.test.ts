@@ -56,6 +56,25 @@ describe("mock-store följer contracts.md", () => {
     assert.equal(ok(db.searchMemory(A, {})).length, 1);
   });
 
+  it("samma project category och title uppdaterar content", () => {
+    const db = new MockMemoryStore();
+    const first = ok(db.saveMemory(A, {
+      ...deadline,
+      category: "goal",
+      title: "Användarmål",
+      content: "Målet är 1000 användare.",
+    }));
+    const second = ok(db.saveMemory(A, {
+      ...deadline,
+      category: "goal",
+      title: "Användarmål",
+      content: "Målet är 2000 användare.",
+    }));
+    assert.equal(second.id, first.id);
+    assert.equal(second.content, "Målet är 2000 användare.");
+    assert.equal(ok(db.searchMemory(A, {})).length, 1);
+  });
+
   it("isolerar konton: B ser inte A och kan inte uppdatera A:s id", () => {
     const db = new MockMemoryStore();
     const m = ok(db.saveMemory(A, deadline));
@@ -72,6 +91,13 @@ describe("mock-store följer contracts.md", () => {
     const missing = db.updateMemory(A, { ...deadline, id: "550e8400-e29b-41d4-a716-446655440000" });
     assert.deepEqual(other, missing);
     assert.equal(err(db.updateMemory(A, { ...deadline, id: "inte-uuid" })), "INVALID_ID");
+    assert.equal(
+      err(db.updateMemory(A, {
+        ...deadline,
+        id: "00000000-0000-0000-0000-000000000000",
+      })),
+      "INVALID_ID",
+    );
   });
 
   it("sök: query skiftlägesokänslig i title/content, project/category exakta", () => {
@@ -125,6 +151,26 @@ describe("mock-store följer contracts.md", () => {
     assert.equal(u.created_at, m.created_at);
     assert.notEqual(u.updated_at, m.updated_at);
     assert.equal(ok(db.searchMemory(A, {})).length, 1);
+  });
+
+  it("update kräver flagga för projektbyte och lesson_memory för ny lärdom", () => {
+    const db = new MockMemoryStore();
+    const m = ok(db.saveMemory(A, deadline));
+    assert.equal(
+      err(db.updateMemory(A, { ...deadline, id: m.id, project: "Projekt B" })),
+      "PROJECT_CHANGE_REQUIRES_FLAG",
+    );
+    assert.equal(
+      err(db.updateMemory(A, { ...deadline, id: m.id, category: "lesson" })),
+      "LESSON_CATEGORY_REQUIRES_TOOL",
+    );
+    const moved = ok(db.updateMemory(A, {
+      ...deadline,
+      id: m.id,
+      project: "Projekt B",
+      allow_project_change: true,
+    }));
+    assert.equal(moved.project, "Projekt B");
   });
 
   it("tar category lesson och går att söka som Lärdom", () => {

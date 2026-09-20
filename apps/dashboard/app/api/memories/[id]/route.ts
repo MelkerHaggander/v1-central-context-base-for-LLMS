@@ -26,11 +26,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     category: String(body.category ?? ""),
     title: String(body.title ?? ""),
     content: String(body.content ?? ""),
+    allow_project_change: body.allow_project_change === true,
   });
 
   if ("error" in result) {
     const status =
-      result.error.code === "NOT_FOUND" ? 404 : result.error.code.startsWith("INVALID_") ? 400 : 500;
+      result.error.code === "NOT_FOUND"
+        ? 404
+        : result.error.code.startsWith("INVALID_") ||
+            result.error.code === "PROJECT_CHANGE_REQUIRES_FLAG" ||
+            result.error.code === "LESSON_CATEGORY_REQUIRES_TOOL"
+          ? 400
+          : 500;
     return jsonError(result.error.code, result.error.message, status);
   }
   return jsonOwned(result.data, account.id);

@@ -53,6 +53,12 @@ test("rejects a non-uuid id", () => {
   assert.equal(result.error.code, "INVALID_ID");
 });
 
+test("rejects the nil UUID", () => {
+  const result = validateMemoryId("00000000-0000-0000-0000-000000000000");
+  assert.ok("error" in result);
+  assert.equal(result.error.code, "INVALID_ID");
+});
+
 test("trims before length", () => {
   const result = validateMemoryInput({
     project: "  Projekt A  ",
