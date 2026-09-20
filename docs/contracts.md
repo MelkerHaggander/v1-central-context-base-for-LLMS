@@ -20,16 +20,16 @@ Databasen lagrar dessutom `user_id`. `user_id` returneras aldrig i svar till kli
 | `created_at` | UTC, exakt `YYYY-MM-DDTHH:MM:SSZ`. Millisekunder utelämnas | Backend |
 | `updated_at` | Samma datumformat | Backend |
 
-Kategorietiketter i dashboarden (svenska):
+Kategorietiketter i dashboarden (engelska). Värdena mot API och MCP är oförändrade gemener:
 
 | `category` | Etikett |
 | --- | --- |
-| `fact` | Faktum |
-| `decision` | Beslut |
-| `goal` | Mål |
+| `fact` | Fact |
+| `decision` | Decision |
+| `goal` | Goal |
 | `deadline` | Deadline |
-| `preference` | Preferens |
-| `lesson` | Lärdom |
+| `preference` | Preference |
+| `lesson` | Lesson |
 
 ### Exempel (svar utan `user_id`)
 

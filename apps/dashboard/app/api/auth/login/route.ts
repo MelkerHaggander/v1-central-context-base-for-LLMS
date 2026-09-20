@@ -13,12 +13,12 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
+    return jsonError("INVALID_BODY", "The request was not valid JSON.", 400);
   }
 
   const account = findAccount(body.email ?? "", body.password ?? "");
   if (!account) {
-    return jsonError("INVALID_CREDENTIALS", "Fel mejl eller lösenord.", 401);
+    return jsonError("INVALID_CREDENTIALS", "Wrong email or password.", 401);
   }
 
   return setSessionCookie(jsonOk({ data: { id: account.id, email: account.email } }), account.id);

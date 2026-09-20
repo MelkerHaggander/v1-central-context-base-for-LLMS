@@ -1,9 +1,6 @@
-import { ConnectView } from "@/components/ConnectView";
-import { mcpUrl } from "@/lib/mcp-url";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-/** Serverkomponent: läser MCP-adressen ur miljön vid varje anrop och skickar ner till klienten. */
-export default function ConnectPage() {
-  return <ConnectView url={mcpUrl()} />;
+/** Old Swedish path. Kept so the links in Confluence and the handovers still work. */
+export default function AnslutPage() {
+  redirect("/connect");
 }

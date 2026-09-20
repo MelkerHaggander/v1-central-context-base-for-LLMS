@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/oauth/crypto.test.ts lib/oauth/urls.test.ts lib/oauth/redirect.test.ts lib/oauth/tokens.test.ts lib/oauth/sessions.test.ts lib/oauth/client-metadata.test.ts lib/oauth/mcp-memory-store.test.ts lib/oauth/resource.test.ts lib/oauth/authorization-code.test.ts lib/supabase/env.test.ts test/instructions.test.ts test/mcp-instructions.test.ts test/mcp-lesson-memory.test.ts test/mcp-no-delete.test.ts test/deny-url.test.ts test/mcp-url.test.ts test/tab-session.test.ts test/mcp-public-handshake.test.ts test/oauth-discovery.test.ts test/mcp-chatgpt.test.ts test/mcp-grok-oauth.test.ts test/oauth-exchange-lock.test.ts"
+    "test": "tsx --test lib/oauth/crypto.test.ts lib/oauth/urls.test.ts lib/oauth/redirect.test.ts lib/oauth/tokens.test.ts lib/oauth/sessions.test.ts lib/oauth/client-metadata.test.ts lib/oauth/mcp-memory-store.test.ts lib/oauth/resource.test.ts lib/oauth/authorization-code.test.ts lib/supabase/env.test.ts test/instructions.test.ts test/mcp-instructions.test.ts test/mcp-lesson-memory.test.ts test/mcp-no-delete.test.ts test/deny-url.test.ts test/mcp-url.test.ts test/tab-session.test.ts test/mcp-public-handshake.test.ts test/oauth-discovery.test.ts test/mcp-chatgpt.test.ts test/mcp-grok-oauth.test.ts test/oauth-exchange-lock.test.ts test/categories.test.ts test/display-error.test.ts"
   },
   "dependencies": {
     "@v1/memory": "file:./vendor/memory",

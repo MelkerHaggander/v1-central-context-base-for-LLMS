@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   if (up) return up;
 
   const account = await currentAccount();
-  if (!account) return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
+  if (!account) return jsonError("UNAUTHENTICATED", "You are not signed in.", 401);
 
   const url = new URL(request.url);
   const offsetRaw = url.searchParams.get("offset");
@@ -33,13 +33,13 @@ export async function POST(request: Request) {
   if (up) return up;
 
   const account = await currentAccount();
-  if (!account) return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
+  if (!account) return jsonError("UNAUTHENTICATED", "You are not signed in.", 401);
 
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
-    return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
+    return jsonError("INVALID_BODY", "The request was not valid JSON.", 400);
   }
 
   const result = mockDb.saveMemory(account.id, {
