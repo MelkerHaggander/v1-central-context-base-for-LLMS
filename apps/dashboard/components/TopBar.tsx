@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/lib/api";
+import { displayApiError } from "@/lib/display-error";
 import { clearBoundTabUser, notifySessionChanged } from "@/lib/tab-session";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui";
@@ -20,7 +21,7 @@ export function TopBar({ email }: { email: string }) {
     const result = await logout();
     setBusy(false);
     if ("error" in result) {
-      setError(result.error.message);
+      setError(displayApiError(result.error));
       return;
     }
     // Drop this tab's binding and tell the other tabs, so none of them keeps

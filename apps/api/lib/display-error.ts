@@ -30,5 +30,12 @@ export function displayErrorMessage(code: string | undefined, message: string): 
     const status = code.slice("HTTP_".length);
     return `The server answered ${status}.`;
   }
+  if (/[åäöÅÄÖ]|måste vara|Kunde inte|Inte inloggad|Ogiltig|Fel mejl|Minnet finns|Logga in/.test(message)) {
+    return code ? `Something went wrong (${code}).` : "Something went wrong.";
+  }
   return message;
+}
+
+export function displayApiError(error: { code: string; message: string }): string {
+  return displayErrorMessage(error.code, error.message);
 }

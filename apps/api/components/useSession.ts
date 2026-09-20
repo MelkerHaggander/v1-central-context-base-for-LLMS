@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { session } from "@/lib/api";
+import { displayApiError } from "@/lib/display-error";
 import {
   bindTabUser,
   clearBoundTabUser,
@@ -27,7 +28,7 @@ export function useSession() {
     const result = await session();
     if (!alive.current) return;
     if ("error" in result) {
-      setError(result.error.message);
+      setError(displayApiError(result.error));
       setUser(null);
       setIncoming(null);
       return;

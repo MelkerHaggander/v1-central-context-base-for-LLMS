@@ -34,18 +34,18 @@ export function validateMemoryInput(input: MemoryInput) {
   const category = input.category?.trim() ?? "";
 
   if (project.length < 1 || project.length > 100) {
-    return fail("INVALID_PROJECT", "project måste vara 1–100 tecken.");
+    return fail("INVALID_PROJECT", "Project must be 1–100 characters.");
   }
   if (title.length < 1 || title.length > 150) {
-    return fail("INVALID_TITLE", "title måste vara 1–150 tecken.");
+    return fail("INVALID_TITLE", "Title must be 1–150 characters.");
   }
   if (content.length < 1 || content.length > 10_000) {
-    return fail("INVALID_CONTENT", "content måste vara 1–10 000 tecken.");
+    return fail("INVALID_CONTENT", "Content must be 1–10,000 characters.");
   }
   if (!(CATEGORIES as readonly string[]).includes(category)) {
     return fail(
       "INVALID_CATEGORY",
-      "category måste vara fact, decision, goal, deadline, preference eller lesson.",
+      "Category must be fact, decision, goal, deadline, preference or lesson.",
     );
   }
   return { data: { project, category: category as Memory["category"], title, content } };
@@ -58,16 +58,16 @@ export function validateSearchInput(input: SearchInput) {
   const offset = input.offset ?? 0;
 
   if (project && project.length > 100) {
-    return fail("INVALID_PROJECT", "project måste vara 1–100 tecken.");
+    return fail("INVALID_PROJECT", "Project must be 1–100 characters.");
   }
   if (category && !(CATEGORIES as readonly string[]).includes(category)) {
     return fail(
       "INVALID_CATEGORY",
-      "category måste vara fact, decision, goal, deadline, preference eller lesson.",
+      "Category must be fact, decision, goal, deadline, preference or lesson.",
     );
   }
   if (!Number.isInteger(offset) || offset < 0) {
-    return fail("INVALID_OFFSET", "offset måste vara ett heltal 0 eller högre.");
+    return fail("INVALID_OFFSET", "offset must be an integer 0 or higher.");
   }
   return {
     data: {
@@ -80,7 +80,7 @@ export function validateSearchInput(input: SearchInput) {
 }
 
 export function validateMemoryId(id: string) {
-  if (!UUID_RE.test(id)) return fail("INVALID_ID", "id måste vara ett UUID.");
+  if (!UUID_RE.test(id)) return fail("INVALID_ID", "id must be a UUID.");
   return { data: id };
 }
 
@@ -153,7 +153,7 @@ export class MockMemoryStore {
     if ("error" in idCheck) return idCheck;
 
     const index = this.rows.findIndex((r) => r.id === idCheck.data && r.user_id === userId);
-    if (index === -1) return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
+    if (index === -1) return fail("NOT_FOUND", "The memory does not exist or belongs to another account.");
 
     this.rows.splice(index, 1);
     return { data: { success: true } };
@@ -167,7 +167,7 @@ export class MockMemoryStore {
 
     // Saknad rad och annan ägare ger samma fel. Avslöjar inte om id finns.
     const row = this.rows.find((r) => r.id === idCheck.data && r.user_id === userId);
-    if (!row) return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
+    if (!row) return fail("NOT_FOUND", "The memory does not exist or belongs to another account.");
 
     Object.assign(row, parsed.data, { updated_at: toIso(new Date()) });
     return { data: strip(row) };

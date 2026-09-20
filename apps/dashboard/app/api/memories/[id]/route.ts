@@ -11,13 +11,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (up) return up;
 
   const account = await currentAccount();
-  if (!account) return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
+  if (!account) return jsonError("UNAUTHENTICATED", "You are not signed in.", 401);
 
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
-    return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
+    return jsonError("INVALID_BODY", "The request was not valid JSON.", 400);
   }
 
   const result = mockDb.updateMemory(account.id, {
@@ -44,7 +44,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   if (up) return up;
 
   const account = await currentAccount();
-  if (!account) return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
+  if (!account) return jsonError("UNAUTHENTICATED", "You are not signed in.", 401);
 
   const result = mockDb.deleteMemory(account.id, id);
   if ("error" in result) {
