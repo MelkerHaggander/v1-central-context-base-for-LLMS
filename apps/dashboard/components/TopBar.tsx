@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/lib/api";
+import { displayApiError } from "@/lib/display-error";
 import { clearBoundTabUser, notifySessionChanged } from "@/lib/tab-session";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui";
 
 export function TopBar({ email }: { email: string }) {
@@ -19,20 +21,21 @@ export function TopBar({ email }: { email: string }) {
     const result = await logout();
     setBusy(false);
     if ("error" in result) {
-      setError(result.error.message);
+      setError(displayApiError(result.error));
       return;
     }
+    // Drop this tab's binding and tell the other tabs, so none of them keeps
+    // showing an account that is no longer signed in.
     clearBoundTabUser();
     notifySessionChanged();
-    // { data: { success: true } } -> tillbaka till inloggning.
     router.replace("/");
   }
 
   const link = (href: string, label: string) => (
     <Link
       href={href}
-      className={`rounded-md px-3 py-1.5 text-sm ${
-        pathname === href ? "bg-accent-soft text-accent" : "text-muted hover:text-foreground"
+      className={`rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+        pathname === href ? "bg-surface-2 text-ink" : "text-ink-2 hover:text-ink"
       }`}
     >
       {label}
@@ -40,21 +43,20 @@ export function TopBar({ email }: { email: string }) {
   );
 
   return (
-    <header className="border-b border-line bg-panel">
-      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
-        <span className="mr-2 font-semibold">Claude-minne</span>
-        <nav className="flex gap-1">
-          {link("/dashboard", "Minnen")}
-          {link("/anslut", "Anslut Claude")}
-        </nav>
-        <div className="ml-auto flex items-center gap-3">
-          <span className="text-sm text-muted">{email}</span>
-          <Button variant="ghost" onClick={onLogout} disabled={busy}>
-            {busy ? "Loggar ut…" : "Logga ut"}
-          </Button>
-        </div>
-        {error ? <p className="w-full text-sm text-danger">{error}</p> : null}
+    <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2.5">
+      <span className="mr-1 text-sm font-semibold tracking-tight">Boringcontext</span>
+      <nav className="flex gap-0.5">
+        {link("/dashboard", "Memories")}
+        {link("/connect", "Connect")}
+      </nav>
+      <div className="ml-auto flex items-center gap-1.5">
+        <ThemeToggle />
+        <span className="hidden text-xs text-ink-3 sm:inline">{email}</span>
+        <Button variant="ghost" onClick={onLogout} disabled={busy}>
+          {busy ? "Signing out…" : "Sign out"}
+        </Button>
       </div>
+      {error ? <p className="w-full text-sm text-danger">{error}</p> : null}
     </header>
   );
 }

@@ -41,7 +41,7 @@ export default async function AuthorizePage({
     (!resourceOk
       ? OAUTH_ERROR_TEXT.resource
       : errorCode
-        ? "Kunde inte godkänna åtkomst."
+        ? "Could not approve access."
         : "");
 
   const client = clientId ? await getClient(clientId) : null;

@@ -1,96 +1,97 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * Connect guide. The technical strings are load bearing and stay exactly as they
+ * are: the MCP path, the /api/health keys, the Kimi command. Only the prose is
+ * English now.
+ *
+ * There is no prompt to paste in V1.1. The server sends its instructions in
+ * initialize.instructions, which is why step three says so out loud: people who
+ * used V1 will look for the paste step.
+ */
+
 import { SessionGate } from "@/components/SessionGate";
 import { TopBar } from "@/components/TopBar";
-import { CopyButton, ErrorText } from "@/components/ui";
+import { CopyButton } from "@/components/ui";
+import { visibleMcpUrl } from "@/lib/mcp-url";
 
 export function ConnectView({ url }: { url: string }) {
-  const [resolvedUrl, setResolvedUrl] = useState(url);
-
-  useEffect(() => {
-    if (!url) setResolvedUrl(`${window.location.origin}/api/mcp`);
-  }, [url]);
+  const resolvedUrl = visibleMcpUrl(url);
 
   return (
     <SessionGate>
       {(user) => (
         <>
           <TopBar email={user.email} />
-          <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-            <h1 className="text-xl font-semibold">Anslut Claude, ChatGPT, Grok eller Kimi</h1>
-            <p className="mt-1 text-sm text-muted">
-              Tre steg. Ingen projektprompt att klistra in. Servern talar om för klienten hur
-              minnet ska användas. Bara minnen som tillhör <strong>{user.email}</strong> syns.
+          <main className="thin-scroll mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6">
+            <h1 className="text-xl font-semibold tracking-tight">
+              Connect Claude, ChatGPT, Grok or Kimi
+            </h1>
+            <p className="mt-1.5 text-sm text-ink-2">
+              Three steps, and no project prompt to paste. The server tells the client how to use
+              the memory. Only memories belonging to <strong>{user.email}</strong> are ever visible.
             </p>
 
             <ol className="mt-6 flex flex-col gap-5">
-              <Step n={1} title="Logga in här">
-                Klart. Du är inloggad som {user.email}. Använd samma konto när du godkänner
-                anslutningen.
+              <Step n={1} title="Sign in here">
+                Done. You are signed in as {user.email}. Use the same account when you approve the
+                connection.
               </Step>
 
-              <Step n={2} title="Kopiera MCP-adressen">
-                {resolvedUrl ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <code className="flex-1 break-all rounded-md border border-line bg-background px-3 py-2 text-sm">
-                      {resolvedUrl}
-                    </code>
-                    <CopyButton text={resolvedUrl} />
-                  </div>
-                ) : (
-                  <ErrorText message="MCP-adressen saknas. Öppna sidan på Vercel-adressen, eller sätt NEXT_PUBLIC_MCP_URL." />
-                )}
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
+              <Step n={2} title="Copy the MCP address">
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="flex-1 break-all rounded-md border border-line bg-surface-2 px-3 py-2 text-sm">
+                    {resolvedUrl}
+                  </code>
+                  <CopyButton text={resolvedUrl} />
+                </div>
+                <p className="mt-2 text-sm text-ink-2">
+                  Same address after every update. Do not paste a unique Vercel link.
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
                   <li>
-                    Claude Desktop: Settings → Connectors → Add custom connector. Fjärranslutning
-                    (Remote MCP).
+                    Claude Desktop: Settings → Connectors → Add custom connector. Remote MCP server.
                   </li>
                   <li>
-                    Grok (grok.com): New Connector → Custom → samma MCP-adress. Inloggningen ska
-                    öppnas av sig själv (som i Claude). Om Grok bara listar verktyg utan login är
-                    deployn för gammal — <code className="text-xs">/api/health</code> ska visa{" "}
+                    Grok (grok.com): New Connector → Custom → the same MCP address. The sign-in
+                    should open by itself, as it does in Claude. If Grok only lists tools without
+                    asking you to sign in, the deployment is too old:{" "}
+                    <code className="text-xs">/api/health</code> should show{" "}
                     <code className="text-xs">grok: oauth-first</code>.
                   </li>
                   <li>
-                    ChatGPT (webben): Settings → Apps → skapa appen från MCP-adressen. Authentication
-                    = Mixed (initialize/list utan nyckel). Sedan ny chatt → Plus → Developer mode →
-                    slå på appen i just den chatten. Om verktygen saknas: ta bort appen och skapa om
-                    den efter att <code className="text-xs">/api/health</code> visar{" "}
+                    ChatGPT (web): Settings → Apps → create the app from the MCP address.
+                    Authentication = Mixed, so initialize and list work without a key. Then a new
+                    chat → Plus → Developer mode → switch the app on in that chat. If the tools are
+                    missing, delete the app and create it again once{" "}
+                    <code className="text-xs">/api/health</code> shows{" "}
                     <code className="text-xs">chatgpt: mixed-auth</code>.
                   </li>
                   <li>
                     Kimi Code:{" "}
                     <code className="text-xs">
-                      kimi mcp add --transport http --auth oauth central-memory {resolvedUrl || "https://DIN-DOMÄN/api/mcp"}
-                    </code>
-                    {" "}sedan{" "}
-                    <code className="text-xs">kimi mcp auth central-memory</code>.
+                      kimi mcp add --transport http --auth oauth central-memory{" "}
+                      {resolvedUrl}
+                    </code>{" "}
+                    then <code className="text-xs">kimi mcp auth central-memory</code>. Not tested
+                    in V1.1.
                   </li>
                 </ul>
-                {isVercelPreviewMcp(resolvedUrl) ? (
-                  <p className="mt-2 text-sm text-red-700">
-                    ChatGPT kan inte använda den här preview-adressen. Vercel-inloggning stoppar
-                    ChatGPT:s servrar. Klistra in production-adressen till{" "}
-                    <code className="text-xs">/api/mcp</code>, inte en <code className="text-xs">-git-</code>{" "}
-                    preview.
-                  </p>
-                ) : null}
               </Step>
 
-              <Step n={3} title="Godkänn åtkomst och börja chatta">
-                Klienten öppnar inloggning. Logga in med <strong>samma konto</strong> som här.
-                Klistra inte in instruktioner i ett projekt. MCP-servern skickar dem själv.
+              <Step n={3} title="Approve access, then just talk">
+                The client opens a sign-in. Use the <strong>same account</strong> as here. Do not
+                paste any instructions into a project: the MCP server sends them itself.
               </Step>
             </ol>
 
-            <section className="mt-8 rounded-lg border border-line bg-panel px-4 py-3 text-sm">
-              <h2 className="font-medium">Testa utan inklistrad prompt</h2>
-              <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
-                <li>Skriv: ”Vi har beslutat att lansera den 20 oktober.”</li>
-                <li>Gå till fliken Minnen. Raden ska synas.</li>
-                <li>Ny chatt: ”När ska vi lansera?” Klienten ska söka själv.</li>
-                <li>Ändra datumet. Samma rad ska uppdateras, inte en dubblett.</li>
+            <section className="mt-8 rounded-xl border border-line bg-surface px-4 py-3 text-sm">
+              <h2 className="font-medium">Check it without pasting a prompt</h2>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-ink-2">
+                <li>Say: &ldquo;We have decided to launch on 20 October.&rdquo;</li>
+                <li>Open Memories. The dot and the row should be there.</li>
+                <li>New chat: &ldquo;When are we launching?&rdquo; The client should search first.</li>
+                <li>Change the date. The same row should update, not a duplicate appear.</li>
               </ol>
             </section>
           </main>
@@ -100,18 +101,10 @@ export function ConnectView({ url }: { url: string }) {
   );
 }
 
-function isVercelPreviewMcp(url: string) {
-  try {
-    return new URL(url).hostname.includes("-git-");
-  } catch {
-    return false;
-  }
-}
-
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-4">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-background">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-ink">
         {n}
       </span>
       <div className="min-w-0 flex-1">

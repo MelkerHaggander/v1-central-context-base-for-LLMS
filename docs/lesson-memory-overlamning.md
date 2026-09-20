@@ -26,7 +26,7 @@ Fyra verktyg:
 
 Det finns inget `create_memory`. Namnet är `save_memory`. Det finns inget `lesson-memory`. Namnet är `lesson_memory`. Det finns inget `delete_memory`. Användaren raderar i dashboarden.
 
-`lesson_memory` anropar `saveLesson` i `@v1/memory`. Servern sätter alltid `category` `lesson`. Klienten skickar inte kategori. `save_memory` nekar `lesson`. Sök och uppdatering tar `lesson`. Dashboardetiketten är Lärdom.
+`lesson_memory` anropar `saveLesson` i `@v1/memory`. Servern sätter alltid `category` `lesson`. Klienten skickar inte kategori. `save_memory` nekar `lesson`. Sök och uppdatering tar `lesson`. Dashboardetiketten är Lesson.
 
 Databasregeln `memories_category_check` tillåter `lesson` (redan applicerad på v1-projektet).
 
@@ -41,7 +41,7 @@ Testmiljö: production-aliaset `https://v1-central-context-base-for-llms.vercel.
 5. Låt en metod misslyckas och en bättre metod bli regeln. Förväntat: `lesson_memory` med vad, varför och när. Svaret har `id` och `category` `lesson`.
 6. Säg ett vanligt faktum. Förväntat: `save_memory`, inte `lesson_memory`.
 7. Ändra samma sak. Förväntat: `update_memory` med samma `id`, ingen dubblett.
-8. Filter `category=lesson` i listan. Förväntat: etiketten Lärdom.
+8. Filter `category=lesson` i listan. Förväntat: etiketten Lesson.
 
 Felfall: ogiltig `category` på `save_memory` (`lesson` eller `Faktum`) ska felas. Påstådd sparning utan `id` i verktygssvaret är fel. Konto B ska inte se Konto A:s lärdomar.
 

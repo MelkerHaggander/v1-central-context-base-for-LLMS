@@ -1,46 +1,154 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f7f7f5;
-  --foreground: #171717;
-  --panel: #ffffff;
-  --line: #e4e4e0;
-  --muted: #6b6b66;
-  --accent: #1f4f3d;
-  --accent-soft: #e6f0eb;
-  --danger: #a4292d;
-  --danger-soft: #fbe9e9;
-}
+/*
+ * Boringcontext dashboard tokens.
+ *
+ * Two jobs are kept apart on purpose. Chrome (surfaces, ink, buttons, focus) is
+ * neutral: no hue at all, so nothing in the interface can be mistaken for data.
+ * Colour belongs to the six categories and nowhere else.
+ *
+ * The six hues are validated, not chosen by eye. Every neighbouring pair in the
+ * category order clears colour-vision separation and the normal-vision floor
+ * against both surfaces. See lib/categories.ts before changing one.
+ *
+ * Dark values are declared twice: once for the OS setting, once for the theme
+ * toggle. The toggle has to win in both directions, which is what the
+ * :not([data-theme="light"]) guard is for.
+ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-panel: var(--panel);
-  --color-line: var(--line);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-danger: var(--danger);
-  --color-danger-soft: var(--danger-soft);
+:root {
+  color-scheme: light;
+
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f2f1ee;
+  --surface-3: #eae9e4;
+  --line: #e3e2dd;
+  --line-2: #cfcec7;
+
+  --ink: #14161a;
+  --ink-2: #55575a;
+  --ink-3: #8a8c8e;
+
+  /* Neutral accent: the ink itself. Guarantees no clash with a category hue. */
+  --accent: #14161a;
+  --accent-ink: #ffffff;
+
+  --danger: #b3261e;
+  --danger-ink: #ffffff;
+  --danger-soft: #fdecea;
+
+  --globe-halo: rgba(20, 22, 26, 0.06);
+  --globe-wire: #e9e8e2;
+  --globe-limb: rgba(20, 22, 26, 0.09);
+
+  --cat-fact: #eb6834;
+  --cat-decision: #2a78d6;
+  --cat-goal: #eda100;
+  --cat-deadline: #e87ba4;
+  --cat-preference: #4a3aa7;
+  --cat-lesson: #008300;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #101211;
-    --foreground: #ececea;
-    --panel: #181b19;
-    --line: #2b2f2c;
-    --muted: #9a9e9a;
-    --accent: #8fc7ad;
-    --accent-soft: #1d2c25;
-    --danger: #f08a8d;
-    --danger-soft: #3a1c1d;
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --bg: #0a0b0c;
+    --surface: #131517;
+    --surface-2: #1b1e21;
+    --surface-3: #22262a;
+    --line: #24282c;
+    --line-2: #333a40;
+
+    --ink: #f1f2f3;
+    --ink-2: #b4b7ba;
+    --ink-3: #82868a;
+
+    --accent: #f1f2f3;
+    --accent-ink: #0a0b0c;
+
+    --danger: #ff8d82;
+    --danger-ink: #1a0f0d;
+    --danger-soft: #2b1614;
+
+    --globe-halo: rgba(255, 255, 255, 0.05);
+    --globe-wire: #1a2025;
+    --globe-limb: rgba(255, 255, 255, 0.1);
+
+    --cat-fact: #d95926;
+    --cat-decision: #3987e5;
+    --cat-goal: #c98500;
+    --cat-deadline: #d55181;
+    --cat-preference: #9085e9;
+    --cat-lesson: #008300;
   }
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0a0b0c;
+  --surface: #131517;
+  --surface-2: #1b1e21;
+  --surface-3: #22262a;
+  --line: #24282c;
+  --line-2: #333a40;
+
+  --ink: #f1f2f3;
+  --ink-2: #b4b7ba;
+  --ink-3: #82868a;
+
+  --accent: #f1f2f3;
+  --accent-ink: #0a0b0c;
+
+  --danger: #ff8d82;
+  --danger-ink: #1a0f0d;
+  --danger-soft: #2b1614;
+
+  --globe-halo: rgba(255, 255, 255, 0.05);
+  --globe-wire: #1a2025;
+  --globe-limb: rgba(255, 255, 255, 0.1);
+
+  --cat-fact: #d95926;
+  --cat-decision: #3987e5;
+  --cat-goal: #c98500;
+  --cat-deadline: #d55181;
+  --cat-preference: #9085e9;
+  --cat-lesson: #008300;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-soft: var(--danger-soft);
+
+  /* Kept for compatibility with views not yet restyled (OAuth approve view). */
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-panel: var(--surface);
+  --color-muted: var(--ink-3);
+  --color-accent-soft: var(--surface-2);
+}
+
+* {
+  border-color: var(--line);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--ink);
   font-family:
     ui-sans-serif,
     system-ui,
@@ -50,4 +158,83 @@ body {
     "Helvetica Neue",
     Arial,
     sans-serif;
+  font-feature-settings: "cv05", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers that sit in columns line up. Standalone figures keep proportional digits. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--surface-3);
+}
+
+/* A recessive scrollbar, so the memory panel does not grow a loud grey bar. */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 999px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+@keyframes bc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: bc-rise 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes bc-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.slide-in {
+  animation: bc-slide-in 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* The globe stops spinning and panels stop sliding when the reader asks for that. */
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .slide-in {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -33,9 +33,9 @@ export default async function AuthorizePage({
       codeChallengeMethod={method}
       resource={str("resource") || undefined}
       email={str("email")}
-      errorText={OAUTH_ERROR_TEXT[errorCode] ?? (errorCode ? "Kunde inte godkänna åtkomst." : undefined)}
+      errorText={OAUTH_ERROR_TEXT[errorCode] ?? (errorCode ? "Could not approve access." : undefined)}
       result={result}
-      banner="Simulerat godkännande (mock). Riktig OAuth mot Supabase kopplas in av Alfredo på integrationsdagen."
+      banner="Simulated approval (mock). The real OAuth against Supabase lives in apps/api."
     />
   );
 }

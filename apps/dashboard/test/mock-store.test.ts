@@ -127,17 +127,34 @@ describe("mock-store följer contracts.md", () => {
     assert.equal(ok(db.searchMemory(A, {})).length, 1);
   });
 
-  it("tar category lesson och går att söka som Lärdom", () => {
+  it("takes category lesson and finds it by the English wire value", () => {
     const db = new MockMemoryStore();
     const m = ok(
       db.saveMemory(A, {
         project: "Projekt A",
         category: "lesson",
-        title: "Rätta category till gemener",
-        content: "Ogiltig category ska rättas till gemener.",
+        title: "Fix category to lowercase",
+        content: "An invalid category must be corrected to lowercase.",
       }),
     );
     assert.equal(m.category, "lesson");
     assert.equal(ok(db.searchMemory(A, { category: "lesson" })).length, 1);
+  });
+
+  it("returns English error text for every validation failure", () => {
+    const db = new MockMemoryStore();
+    const cases = [
+      db.saveMemory(A, { ...deadline, project: "  " }),
+      db.saveMemory(A, { ...deadline, title: "   " }),
+      db.saveMemory(A, { ...deadline, content: "" }),
+      db.saveMemory(A, { ...deadline, category: "Deadline" }),
+      db.searchMemory(A, { offset: -1 }),
+      db.updateMemory(A, { ...deadline, id: "not-a-uuid" }),
+      db.deleteMemory(A, "550e8400-e29b-41d4-a716-446655440000"),
+    ];
+    for (const result of cases) {
+      assert.ok("error" in result);
+      assert.equal(/[åäöÅÄÖ]|måste vara|Kunde inte|Inte inloggad|Ogiltig|Minnet finns/.test(result.error.message), false);
+    }
   });
 });
