@@ -1,27 +1,24 @@
-import { pkceChallenge } from "@/lib/oauth/crypto";
-import { exchangeAuthorizationCode, type ExchangedCode } from "@/lib/oauth/store";
-import { issueMcpTokens, type IssuedTokens } from "@/lib/oauth/sessions";
+import { releaseMcpTokens, type ReleasedMcpTokens } from "@/lib/oauth/store";
+import { mcpClientExpiresIn, type IssuedTokens } from "@/lib/oauth/sessions";
 
 export type AuthorizationCodeGrant =
   | { error: "invalid_grant" }
   | { issued: IssuedTokens };
 
 export type AuthorizationCodeGrantDeps = {
-  exchangeAuthorizationCode: typeof exchangeAuthorizationCode;
-  issueMcpTokens: typeof issueMcpTokens;
-  pkceChallenge: typeof pkceChallenge;
+  releaseMcpTokens: typeof releaseMcpTokens;
+  expiresIn: () => number;
 };
 
 const defaultDeps: AuthorizationCodeGrantDeps = {
-  exchangeAuthorizationCode,
-  issueMcpTokens,
-  pkceChallenge,
+  releaseMcpTokens,
+  expiresIn: () => mcpClientExpiresIn(),
 };
 
 /**
  * Authorization-code grant after the HTTP layer has read the body.
- * PKCE is hashed here and sent to the database; the code is not consumed unless
- * the challenge matches in the same statement.
+ * The database hashes the verifier. A mismatch does not consume the code.
+ * MCP tokens were created when the user approved, so this step does not need service_role.
  */
 export async function authorizationCodeGrant(
   params: Record<string, string>,
@@ -35,18 +32,20 @@ export async function authorizationCodeGrant(
     return { error: "invalid_grant" };
   }
 
-  const row: ExchangedCode | null = await deps.exchangeAuthorizationCode({
+  const released: ReleasedMcpTokens | null = await deps.releaseMcpTokens({
     code,
     clientId,
     redirectUri,
-    codeChallenge: deps.pkceChallenge(verifier),
+    codeVerifier: verifier,
   });
-  if (!row) return { error: "invalid_grant" };
+  if (!released) return { error: "invalid_grant" };
 
-  const issued = await deps.issueMcpTokens({
-    userId: row.userId,
-    supabaseAccess: row.supabaseAccess,
-    supabaseRefresh: row.supabaseRefresh,
-  });
-  return { issued };
+  return {
+    issued: {
+      access_token: released.access_token,
+      refresh_token: released.refresh_token,
+      expires_in: deps.expiresIn(),
+      supabase_access: "",
+    },
+  };
 }
