@@ -1,7 +1,7 @@
 # Teknisk överlämning: Claude och Grok får inget MCP-tillstånd
 
 **Ansvarig:** Alfredo  
-**Gren:** `cursor/oauth-release-without-service-role-544c`  
+**Gren/PR:** `cursor/oauth-release-without-service-role-544c` · https://github.com/barrettaalfredo-hue/BoringContext-Central-intelligence-system-LLMS/pull/37  
 **Uppgift:** Kopplingen ska fungera igen för Claude, Grok och ChatGPT utan att byta MCP-adress  
 **Granskad:** 21 september 2026
 
