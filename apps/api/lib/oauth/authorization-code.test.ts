@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { authorizationCodeGrant } from "./authorization-code";
 import { pkceChallenge } from "./crypto";
-import { exchangeAuthorizationCode, type OauthAdminRpc } from "./store";
+import { releaseMcpTokens, type OauthRpc } from "./store";
 
-const USER = "a9625693-0207-4f2b-bf34-f65964eaa346";
 const VERIFIER = "test-verifier-value";
 const CHALLENGE = pkceChallenge(VERIFIER);
 const NOW = new Date("2026-09-20T16:00:00.000Z");
@@ -14,9 +13,8 @@ type CodeRow = {
   client_id: string;
   redirect_uri: string;
   code_challenge: string;
-  access_token: string;
-  refresh_token: string | null;
-  user_id: string;
+  mcp_access_token: string | null;
+  mcp_refresh_token: string | null;
   expires_at: Date;
 };
 
@@ -26,25 +24,25 @@ function sampleRow(overrides: Partial<CodeRow> = {}): CodeRow {
     client_id: "client-1",
     redirect_uri: "https://claude.ai/api/mcp/auth_callback",
     code_challenge: CHALLENGE,
-    access_token: "sb-access",
-    refresh_token: "sb-refresh",
-    user_id: USER,
+    mcp_access_token: "mcp-access",
+    mcp_refresh_token: "mcp-refresh",
     expires_at: new Date("2026-09-20T16:10:00.000Z"),
     ...overrides,
   };
 }
 
-/** Mirrors public.oauth_exchange_code: match in the same DELETE, miss leaves the row. */
-function fakeExchange(rows: CodeRow[], now = NOW): OauthAdminRpc {
+/** Mirrors oauth_release_mcp_tokens: hash the verifier, miss leaves the row. */
+function fakeRelease(rows: CodeRow[], now = NOW): OauthRpc {
   return {
     async rpc(fn, args) {
-      assert.equal(fn, "oauth_exchange_code");
-      assert.equal("p_code" in args && "p_client_id" in args && "p_redirect_uri" in args && "p_code_challenge" in args, true);
+      assert.equal(fn, "oauth_release_mcp_tokens");
+      assert.equal("p_code_challenge" in args, false);
       const code = String(args.p_code ?? "");
       const clientId = String(args.p_client_id ?? "");
       const redirectUri = String(args.p_redirect_uri ?? "");
-      const challenge = String(args.p_code_challenge ?? "");
-      if (!code || !clientId || !redirectUri || !challenge) return { data: [], error: null };
+      const verifier = String(args.p_code_verifier ?? "");
+      if (!code || !clientId || !redirectUri || !verifier) return { data: [], error: null };
+      const challenge = pkceChallenge(verifier);
       const index = rows.findIndex(
         (row) =>
           row.code === code &&
@@ -52,18 +50,13 @@ function fakeExchange(rows: CodeRow[], now = NOW): OauthAdminRpc {
           row.redirect_uri === redirectUri &&
           row.code_challenge === challenge &&
           row.expires_at.getTime() > now.getTime() &&
-          Boolean(row.refresh_token),
+          Boolean(row.mcp_access_token) &&
+          Boolean(row.mcp_refresh_token),
       );
       if (index === -1) return { data: [], error: null };
       const [hit] = rows.splice(index, 1);
       return {
-        data: [
-          {
-            user_id: hit.user_id,
-            access_token: hit.access_token,
-            refresh_token: hit.refresh_token,
-          },
-        ],
+        data: [{ access_token: hit.mcp_access_token, refresh_token: hit.mcp_refresh_token }],
         error: null,
       };
     },
@@ -79,19 +72,13 @@ const grantParams = {
 
 async function grantWith(rows: CodeRow[], params: Record<string, string> = grantParams) {
   return authorizationCodeGrant(params, {
-    exchangeAuthorizationCode: (input) => exchangeAuthorizationCode(input, fakeExchange(rows)),
-    issueMcpTokens: async () => ({
-      access_token: "mcp-access",
-      refresh_token: "mcp-refresh",
-      expires_in: 3600,
-      supabase_access: "sb-access",
-    }),
-    pkceChallenge,
+    releaseMcpTokens: (input) => releaseMcpTokens(input, fakeRelease(rows)),
+    expiresIn: () => 3600,
   });
 }
 
 describe("authorization code exchange", () => {
-  it("returns tokens for a matching code and verifier", async () => {
+  it("returns the MCP tokens saved at approval when the verifier matches", async () => {
     const rows = [sampleRow()];
     const result = await grantWith(rows);
     assert.equal("issued" in result, true);
@@ -99,6 +86,7 @@ describe("authorization code exchange", () => {
       assert.equal(result.issued.access_token, "mcp-access");
       assert.equal(result.issued.refresh_token, "mcp-refresh");
       assert.equal(result.issued.expires_in, 3600);
+      assert.equal(result.issued.supabase_access, "");
     }
     assert.equal(rows.length, 0);
   });
@@ -158,22 +146,10 @@ describe("authorization code exchange", () => {
     assert.equal(rows.length, 0);
   });
 
-  it("does not return supabase tokens through the public RPC shape", async () => {
-    const rows = [sampleRow()];
-    const exchanged = await exchangeAuthorizationCode(
-      {
-        code: "auth-code-1",
-        clientId: "client-1",
-        redirectUri: "https://claude.ai/api/mcp/auth_callback",
-        codeChallenge: CHALLENGE,
-      },
-      fakeExchange(rows),
-    );
-    assert.deepEqual(exchanged, {
-      userId: USER,
-      supabaseAccess: "sb-access",
-      supabaseRefresh: "sb-refresh",
-    });
-    assert.equal("code_challenge" in (exchanged as object), false);
+  it("does not release a row that has no MCP tokens", async () => {
+    const rows = [sampleRow({ mcp_access_token: null, mcp_refresh_token: null })];
+    const result = await grantWith(rows);
+    assert.deepEqual(result, { error: "invalid_grant" });
+    assert.equal(rows.length, 1);
   });
 });

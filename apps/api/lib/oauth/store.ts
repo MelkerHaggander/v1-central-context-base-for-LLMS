@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient, createSupabaseAnonClient, createSupabaseUserClient } from "@/lib/supabase/clients";
+import { createSupabaseAnonClient, createSupabaseUserClient } from "@/lib/supabase/clients";
 import { fetchClientMetadata } from "./client-metadata";
 import { redirectAllowed as uriAllowed } from "./redirect";
 
@@ -58,48 +58,70 @@ export async function saveCode(row: {
   if (error) throw error;
 }
 
-export type ExchangedCode = {
-  userId: string;
-  supabaseAccess: string;
-  supabaseRefresh: string;
+export async function saveMcpCode(row: {
+  code: string;
+  client_id: string;
+  redirect_uri: string;
+  code_challenge: string;
+  mcp_access: string;
+  mcp_refresh: string;
+  user_id: string;
+  /** Supabase access token of the signed-in user. Authorizes the save. Not stored. */
+  bearer: string;
+}) {
+  const supabase = createSupabaseUserClient(row.bearer);
+  const { error } = await supabase.rpc("oauth_save_mcp_code", {
+    p_code: row.code,
+    p_client_id: row.client_id,
+    p_redirect_uri: row.redirect_uri,
+    p_code_challenge: row.code_challenge,
+    p_mcp_access: row.mcp_access,
+    p_mcp_refresh: row.mcp_refresh,
+    p_user_id: row.user_id,
+  });
+  if (error) throw error;
+}
+
+export type ReleasedMcpTokens = {
+  access_token: string;
+  refresh_token: string;
 };
 
-export type OauthAdminRpc = {
+export type OauthRpc = {
   rpc: (
     fn: string,
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message?: string } | null }>;
 };
 
-function exchangedRow(data: unknown): ExchangedCode | null {
+function releasedRow(data: unknown): ReleasedMcpTokens | null {
   const row = (Array.isArray(data) ? data[0] : data) as
-    | { user_id?: string; access_token?: string; refresh_token?: string | null }
+    | { access_token?: string; refresh_token?: string | null }
     | undefined;
-  if (!row?.user_id || !row.access_token || !row.refresh_token) return null;
-  return {
-    userId: row.user_id,
-    supabaseAccess: row.access_token,
-    supabaseRefresh: row.refresh_token,
-  };
+  if (!row?.access_token || !row.refresh_token) return null;
+  return { access_token: row.access_token, refresh_token: row.refresh_token };
 }
 
-/** Consume a code only when PKCE, client and redirect match. Service role only. */
-export async function exchangeAuthorizationCode(
+/**
+ * Hand the MCP tokens to the client after the verifier matches.
+ * Uses the anon key. The database hashes the verifier. Supabase tokens are not returned.
+ */
+export async function releaseMcpTokens(
   input: {
     code: string;
     clientId: string;
     redirectUri: string;
-    codeChallenge: string;
+    codeVerifier: string;
   },
-  admin?: OauthAdminRpc,
-): Promise<ExchangedCode | null> {
-  const client = admin ?? createSupabaseAdminClient();
-  const { data, error } = await client.rpc("oauth_exchange_code", {
+  client?: OauthRpc,
+): Promise<ReleasedMcpTokens | null> {
+  const supabase = client ?? createSupabaseAnonClient();
+  const { data, error } = await supabase.rpc("oauth_release_mcp_tokens", {
     p_code: input.code,
     p_client_id: input.clientId,
     p_redirect_uri: input.redirectUri,
-    p_code_challenge: input.codeChallenge,
+    p_code_verifier: input.codeVerifier,
   });
   if (error) throw error;
-  return exchangedRow(data);
+  return releasedRow(data);
 }
