@@ -7,6 +7,10 @@ const migration = readFileSync(
   new URL("../../../supabase/migrations/20260920180000_oauth_exchange_code_pkce.sql", import.meta.url),
   "utf8",
 );
+const releaseMigration = readFileSync(
+  new URL("../../../supabase/migrations/20260921190000_oauth_release_mcp_tokens.sql", import.meta.url),
+  "utf8",
+);
 const tokenRoute = readFileSync(new URL("../app/oauth/token/route.ts", import.meta.url), "utf8");
 const approveRoute = readFileSync(new URL("../app/oauth/approve/route.ts", import.meta.url), "utf8");
 const authorizePage = readFileSync(new URL("../app/oauth/authorize/page.tsx", import.meta.url), "utf8");
@@ -44,16 +48,31 @@ describe("oauth_exchange_code lock", () => {
 
   it("does not expose supabase tokens through a public consume RPC", () => {
     assert.doesNotMatch(store, /oauth_consume_code/);
-    assert.doesNotMatch(store, /createSupabaseAnonClient\(\);\n  const \{ data, error \} = await supabase\.rpc\("oauth_exchange_code"/);
-    assert.match(store, /createSupabaseAdminClient\(\)/);
-    assert.match(store, /client\.rpc\("oauth_exchange_code"/);
+    assert.doesNotMatch(store, /oauth_exchange_code/);
+    assert.match(store, /supabase\.rpc\("oauth_release_mcp_tokens"/);
+    assert.match(store, /p_code_verifier: input.codeVerifier/);
+    assert.doesNotMatch(store, /p_code_challenge: input/);
     assert.doesNotMatch(tokenRoute, /oauth_consume_code|consumeCode|pkceChallenge\(verifier\) !== row/);
+    assert.match(releaseMigration, /returning c\.mcp_access_token, c\.mcp_refresh_token/);
+    assert.doesNotMatch(releaseMigration, /returning c\.access_token, c\.refresh_token/);
+    assert.match(
+      releaseMigration,
+      /grant execute on function public\.oauth_release_mcp_tokens\(text, text, text, text\) to anon, authenticated, service_role/,
+    );
+    assert.doesNotMatch(
+      releaseMigration,
+      /grant execute on function public\.oauth_exchange_code\(text, text, text, text\) to anon/,
+    );
+    assert.match(releaseMigration, /extensions\.digest/);
+    assert.match(approveRoute, /issueMcpTokens/);
+    assert.match(approveRoute, /saveMcpCode/);
+    assert.doesNotMatch(approveRoute, /saveCode\(/);
   });
 
   it("keeps the same Connect user flow for current clients", () => {
     assert.match(authorizePage, /OAuthApproveView/);
     assert.match(authorizePage, /action="\/oauth\/approve"/);
-    assert.match(approveRoute, /await saveCode\(/);
+    assert.match(approveRoute, /await saveMcpCode\(/);
     assert.match(approveRoute, /next\.searchParams\.set\("code", code\)/);
     assert.match(approveRoute, /Response\.redirect\(next, 302\)/);
     assert.match(tokenRoute, /token_type: "Bearer"/);

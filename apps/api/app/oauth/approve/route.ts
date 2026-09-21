@@ -1,7 +1,8 @@
 import { createSupabaseAnonClient } from "@/lib/supabase/clients";
 import { randomToken } from "@/lib/oauth/crypto";
 import { resourceAllowed } from "@/lib/oauth/resource";
-import { getClient, redirectAllowed, saveCode } from "@/lib/oauth/store";
+import { issueMcpTokens } from "@/lib/oauth/sessions";
+import { getClient, redirectAllowed, saveMcpCode } from "@/lib/oauth/store";
 import { publicOrigin } from "@/lib/oauth/urls";
 
 export const dynamic = "force-dynamic";
@@ -52,15 +53,21 @@ export async function POST(request: Request) {
       return fail(request, form, "credentials");
     }
 
+    const issued = await issueMcpTokens({
+      userId: data.user.id,
+      supabaseAccess: data.session.access_token,
+      supabaseRefresh: data.session.refresh_token,
+    });
     const code = randomToken();
-    await saveCode({
+    await saveMcpCode({
       code,
       client_id: clientId,
       redirect_uri: redirectUri,
       code_challenge: codeChallenge,
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
+      mcp_access: issued.access_token,
+      mcp_refresh: issued.refresh_token,
       user_id: data.user.id,
+      bearer: data.session.access_token,
     });
 
     const next = new URL(redirectUri);
