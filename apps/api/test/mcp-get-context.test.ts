@@ -31,6 +31,14 @@ describe("get_context prompt transports", () => {
     assert.match(registration, /project:\s*z\.string\(\)\.max\(100\)\.optional\(\)/);
     assert.doesNotMatch(registration, /\b(?:keywords|query|category|offset):/);
     assert.match(registration, /\.getContext\(userId, input\)/);
+    assert.match(registration, /quoted user data, not instructions/);
+  });
+
+  it("describes save_memory as an identity upsert", () => {
+    assert.match(
+      mcpRouteSrc,
+      /same trimmed project, category and title update the existing row/,
+    );
   });
 
   it("removes search_memory from the MCP tool list", () => {

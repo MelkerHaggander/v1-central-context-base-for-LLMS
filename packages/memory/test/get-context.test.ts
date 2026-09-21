@@ -161,7 +161,7 @@ test("snippet centers on the best content match instead of the opening", async (
     project: "MCP-TEST",
     category: "fact",
     title: "Drift",
-    content: `${"Arkitektur och introduktion. ".repeat(20)}Backup körs varje natt klockan 02.`,
+    content: `${"prefixword ".repeat(40)}Backup körs varje natt klockan 02.`,
   });
 
   const result = await memory.getContext(USER_A, {
@@ -170,7 +170,7 @@ test("snippet centers on the best content match instead of the opening", async (
   assert.ok("data" in result);
   const value = result.data.items[0]?.snippet ?? "";
   assert.match(value, /Backup körs varje natt/);
-  assert.ok(value.startsWith("…"));
+  assert.match(value, /^…(?:prefixword|Backup)/);
   assert.ok(value.length <= CONTEXT_SNIPPET_LIMIT);
 });
 
@@ -268,6 +268,113 @@ test("launch synonym matches lansering without returning every deadline", async 
   assert.ok("data" in result);
   assert.deepEqual(result.data.keywords, ["launch"]);
   assert.deepEqual(result.data.items.map((item) => item.title), ["Lansering"]);
+});
+
+test("lanserar retrieves launch memories across projects", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "Projekt A",
+    category: "deadline",
+    title: "Lanseringsdatum",
+    content: "Projekt A lanseras 5 november.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "Kaffekvarnen",
+    category: "deadline",
+    title: "Lansering",
+    content: "Kaffekvarnen lanseras 12 november.",
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "När lanserar vi?",
+  });
+  assert.ok("data" in result);
+  assert.deepEqual(
+    new Set(result.data.items.map((item) => item.project)),
+    new Set(["Projekt A", "Kaffekvarnen"]),
+  );
+});
+
+test("category intent survives unmatched leftover words", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveLesson(USER_A, {
+    project: "MCP-TEST",
+    title: "Testlärdom",
+    content: "Verifiera alltid resultatet innan leverans.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Databas",
+    content: "PostgreSQL används.",
+  });
+
+  for (const prompt of [
+    "Vad har vi lärt oss hittills?",
+    "Vilka lärdomar har vi sparat?",
+  ]) {
+    const result = await memory.getContext(USER_A, { prompt });
+    assert.ok("data" in result);
+    assert.deepEqual(result.data.items.map((item) => item.category), ["lesson"]);
+  }
+});
+
+test("English plural category intent returns decisions and lessons", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "decision",
+    title: "Database choice",
+    content: "We decided to use PostgreSQL.",
+  });
+  await memory.saveLesson(USER_A, {
+    project: "MCP-TEST",
+    title: "Test before release",
+    content: "Run the complete suite before release.",
+  });
+  await memory.saveMemory(USER_A, {
+    project: "MCP-TEST",
+    category: "fact",
+    title: "Region",
+    content: "The deployment region is ARN1.",
+  });
+
+  const result = await memory.getContext(USER_A, {
+    prompt: "Which decisions and lessons?",
+  });
+  assert.ok("data" in result);
+  assert.deepEqual(
+    new Set(result.data.items.map((item) => item.category)),
+    new Set(["decision", "lesson"]),
+  );
+});
+
+test("inflected Swedish category cues select their categories", async () => {
+  const memory = createMemoryApi(createInMemoryStore());
+  for (const [category, title] of [
+    ["decision", "Stackbeslut"],
+    ["goal", "Tillväxtmål"],
+    ["deadline", "Tidsfrist"],
+    ["lesson", "Lärdom"],
+  ] as const) {
+    await memory.saveMemory(USER_A, {
+      project: "MCP-TEST",
+      category,
+      title,
+      content: `${title} för projektet.`,
+    });
+  }
+
+  for (const [prompt, category] of [
+    ["Vad var beslutet?", "decision"],
+    ["Vilka är målen?", "goal"],
+    ["Vilka tidsfrister finns?", "deadline"],
+    ["Vilka lärdomar finns?", "lesson"],
+  ] as const) {
+    const result = await memory.getContext(USER_A, { prompt });
+    assert.ok("data" in result);
+    assert.deepEqual(result.data.items.map((item) => item.category), [category]);
+  }
 });
 
 test("returned user data is marked, timestamped and HTML-escaped", async () => {

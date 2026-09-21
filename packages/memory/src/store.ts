@@ -189,14 +189,16 @@ const CATEGORY_CUES: Record<Category, Set<string>> = {
   decision: new Set([
     "beslut",
     "beslutade",
+    "beslutet",
     "bestämt",
     "bestämdes",
     "decide",
     "decided",
     "decision",
+    "decisions",
     "valde",
   ]),
-  goal: new Set(["goal", "goals", "mål", "målet", "målbild", "objective"]),
+  goal: new Set(["goal", "goals", "mål", "målen", "målet", "målbild", "objective"]),
   deadline: new Set([
     "kommande",
     "lansering",
@@ -207,6 +209,7 @@ const CATEGORY_CUES: Record<Category, Set<string>> = {
     "due",
     "när",
     "tidsfrist",
+    "tidsfrister",
     "when",
   ]),
   preference: new Set([
@@ -237,7 +240,7 @@ const CATEGORY_CUE_WORDS = new Set(
 
 const SYNONYM_GROUPS = [
   ["databas", "database"],
-  ["lansera", "lansering", "launch"],
+  ["lanser", "lansera", "lansering", "launch"],
 ] as const;
 
 const SWEDISH_SUFFIXES = [
@@ -416,6 +419,38 @@ function escapeUserText(value: string): string {
   return value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;");
 }
 
+function snapToWordBoundaries(
+  content: string,
+  left: number,
+  right: number,
+  match?: MatchSpan,
+): { left: number; right: number } {
+  const requiredStart = match?.start ?? right;
+  const requiredEnd = match?.end ?? 0;
+
+  while (
+    left > 0 &&
+    left < requiredStart &&
+    /\S/u.test(content[left - 1] ?? "") &&
+    /\S/u.test(content[left] ?? "")
+  ) {
+    left += 1;
+  }
+  while (left < requiredStart && /\s/u.test(content[left] ?? "")) left += 1;
+
+  while (
+    right < content.length &&
+    right > requiredEnd &&
+    /\S/u.test(content[right - 1] ?? "") &&
+    /\S/u.test(content[right] ?? "")
+  ) {
+    right -= 1;
+  }
+  while (right > requiredEnd && /\s/u.test(content[right - 1] ?? "")) right -= 1;
+
+  return { left, right };
+}
+
 function escapedWindow(content: string, match?: MatchSpan): string {
   if (!content) return "";
 
@@ -435,7 +470,8 @@ function escapedWindow(content: string, match?: MatchSpan): string {
     ) {
       right += 1;
     }
-    return value(0, right);
+    const snapped = snapToWordBoundaries(content, 0, right);
+    return value(snapped.left, snapped.right > 0 ? snapped.right : right);
   }
 
   while (value(left, right).length > CONTEXT_SNIPPET_LIMIT && right > left) {
@@ -461,7 +497,8 @@ function escapedWindow(content: string, match?: MatchSpan): string {
     }
     expandLeft = !expandLeft;
   }
-  return value(left, right);
+  const snapped = snapToWordBoundaries(content, left, right, match);
+  return value(snapped.left, snapped.right);
 }
 
 function snippet(content: string, terms: Set<string>[]): string {
@@ -696,8 +733,7 @@ export async function getContext(
   const cues = categoryCues(prompt);
   const terms = keywords.map(keywordForms);
   const deduplicated = newestByIdentity(rows);
-  const ranked = deduplicated.rows
-    .map((row) => {
+  const scored = deduplicated.rows.map((row) => {
       const title = textStems(row.title);
       const content = textStems(row.content);
       const project = textStems(row.project);
@@ -739,14 +775,21 @@ export async function getContext(
         : 0;
       const categoryBoost =
         lexicalScore > 0 && cues.has(row.category) ? 8 : 0;
-      const categoryIntent =
-        terms.length === 0 && cues.has(row.category) ? 20 : 0;
       return {
         row,
         key: duplicateKey(row),
-        score: lexicalScore + categoryBoost + categoryIntent,
+        lexicalScore,
+        score: lexicalScore + categoryBoost,
       };
-    })
+    });
+  const hasLexicalMatch = scored.some(({ lexicalScore }) => lexicalScore > 0);
+  const ranked = scored
+    .map((candidate) => ({
+      ...candidate,
+      score:
+        candidate.score +
+        (!hasLexicalMatch && cues.has(candidate.row.category) ? 20 : 0),
+    }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => {
       if (a.score !== b.score) return b.score - a.score;

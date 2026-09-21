@@ -1,13 +1,21 @@
-import type { MemoryRecord, MemoryStore, NormalizedMemoryInput } from "@v1/memory";
+import {
+  toIso,
+  type MemoryRecord,
+  type MemoryStore,
+  type NormalizedMemoryInput,
+} from "@v1/memory";
 import { createSupabaseAnonClient } from "@/lib/supabase/clients";
 
 function asIso(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+  try {
+    return toIso(value);
+  } catch {
+    return value;
+  }
 }
 
-function asMemory(value: unknown): MemoryRecord | null {
+export function asMemory(value: unknown): MemoryRecord | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
   const created_at = asIso(row.created_at);
