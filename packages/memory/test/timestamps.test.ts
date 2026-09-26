@@ -25,9 +25,18 @@ test("created_at frozen on update", async () => {
   const saved = await memory.saveMemory(USER_A, DEADLINE);
   assert.ok("data" in saved);
   assert.equal(saved.data.created_at, "2026-09-10T12:00:00Z");
-  const updated = await memory.updateMemory(USER_A, { id: saved.data.id, ...DEADLINE });
+  const identical = await memory.updateMemory(USER_A, { id: saved.data.id, ...DEADLINE });
+  assert.ok("data" in identical);
+  assert.equal(identical.data.created_at, saved.data.created_at);
+  assert.equal(identical.data.id, saved.data.id);
+  assert.equal(identical.data.updated_at, saved.data.updated_at);
+
+  const updated = await memory.updateMemory(USER_A, {
+    id: saved.data.id,
+    ...DEADLINE,
+    content: "Vi lanserar 22 oktober 2026.",
+  });
   assert.ok("data" in updated);
   assert.equal(updated.data.created_at, saved.data.created_at);
-  assert.equal(updated.data.id, saved.data.id);
-  assert.equal(updated.data.updated_at, "2026-09-10T12:00:01Z");
+  assert.ok(updated.data.updated_at > saved.data.updated_at);
 });

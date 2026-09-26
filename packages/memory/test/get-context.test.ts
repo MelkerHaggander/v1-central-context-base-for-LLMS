@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { cosineSimilarity } from "../src/brain";
 import { createInMemoryStore } from "../src/in-memory";
 import {
   CONTEXT_ITEM_LIMIT,
@@ -8,7 +9,40 @@ import {
   createMemoryApi,
   extractKeywords,
 } from "../src/store";
+import type { EmbeddingClient, MemoryDraft, MemoryFormulator, SpaceAccess } from "../src/types";
 import { USER_A, USER_B } from "./fixtures";
+
+const PERSONAL = "aaaaaaaa-aaaa-4aaa-8aaa-000000000010";
+const SHARED = "aaaaaaaa-aaaa-4aaa-8aaa-000000000011";
+const OTHER = "aaaaaaaa-aaaa-4aaa-8aaa-000000000012";
+
+function memberSpaces(userId: string, readable: string[] = [PERSONAL, SHARED]): SpaceAccess {
+  return {
+    async readableSpaceIds(id) {
+      return id === userId ? readable : [];
+    },
+    async spaceFor(id, kind) {
+      if (id !== userId) return null;
+      if (kind === "shared") return readable.includes(SHARED) ? SHARED : null;
+      return readable.includes(PERSONAL) ? PERSONAL : null;
+    },
+    async isMember(id, spaceId) {
+      return id === userId && readable.includes(spaceId);
+    },
+  };
+}
+
+function embeddingFrom(map: (text: string) => number[]): EmbeddingClient & { calls: string[] } {
+  const calls: string[] = [];
+  return {
+    dimensions: 3,
+    calls,
+    async embed(text: string) {
+      calls.push(text);
+      return map(text);
+    },
+  };
+}
 
 test("extractKeywords removes Swedish stop words and punctuation", () => {
   assert.deepEqual(extractKeywords("När ska vi lansera projektet?"), [
@@ -563,7 +597,9 @@ test("clips snippets and packs matches into the response budget", async () => {
   assert.ok("data" in result);
   assert.ok(result.data.items.length <= CONTEXT_ITEM_LIMIT);
   assert.ok(result.data.items.every((item) => item.snippet.length <= CONTEXT_SNIPPET_LIMIT));
-  assert.ok(JSON.stringify(result.data).length <= CONTEXT_JSON_LIMIT);
+  assert.deepEqual(result.data.written, []);
+  const { written: _written, ...legacy } = result.data;
+  assert.ok(JSON.stringify(legacy).length <= CONTEXT_JSON_LIMIT);
   assert.equal(result.data.omitted, CONTEXT_ITEM_LIMIT + 2 - result.data.items.length);
   assert.ok(result.data.omitted > 0);
   assert.deepEqual(Object.keys(result.data.items[0] ?? {}).sort(), [
@@ -612,4 +648,458 @@ test("listByUser failures return SEARCH_FAILED", async () => {
   const result = await memory.getContext(USER_A, { prompt: "raketmotor" });
   assert.ok("error" in result);
   assert.equal(result.error.code, "SEARCH_FAILED");
+});
+
+test("nearby vectors are returned together when the words do not overlap", async () => {
+  const store = createInMemoryStore();
+  const embedding = embeddingFrom((text) => {
+    if (text.includes("ALPHA")) return [1, 0, 0];
+    if (text.includes("BETA")) return [0.8, 0.6, 0];
+    if (text.includes("qqqq")) return [1, 0, 0];
+    return [0, 1, 0];
+  });
+  const memory = createMemoryApi(store, {
+    embedding,
+    spaces: memberSpaces(USER_A),
+    formulator: { async formulate() { return []; } },
+  });
+  await memory.saveDashboardMemory(USER_A, {
+    project: "Vectors",
+    category: "fact",
+    title: "Alpha note",
+    content: "ALPHA quartz crystal",
+  }, PERSONAL);
+  await memory.saveDashboardMemory(USER_A, {
+    project: "Vectors",
+    category: "fact",
+    title: "Beta note",
+    content: "BETA marble stone",
+  }, PERSONAL);
+
+  const result = await memory.getContext(USER_A, { prompt: "qqqq zebra" });
+  assert.ok("data" in result);
+  assert.deepEqual(result.data.items.map((item) => item.title).sort(), [
+    "Alpha note",
+    "Beta note",
+  ]);
+  assert.ok(result.data.items.length <= CONTEXT_ITEM_LIMIT);
+});
+
+test("thresholds 0.35 and 0.55 do not pad the pack with a weak neighbor", async () => {
+  const store = createInMemoryStore();
+  const hit = [0.4, 0.916515138991168, 0];
+  const neighbor = [0.2, 0.9797958971132712, 0];
+  const weak = [0.2, -0.9797958971132712, 0];
+  const low = [0.34, -0.940374469585652, 0];
+  const prompt = [1, 0, 0];
+  assert.ok(cosineSimilarity(prompt, hit) >= 0.35);
+  assert.ok(cosineSimilarity(prompt, neighbor) < 0.35);
+  assert.ok(cosineSimilarity(hit, neighbor) >= 0.55);
+  assert.ok(cosineSimilarity(hit, weak) < 0.55);
+  assert.ok(cosineSimilarity(prompt, low) < 0.35);
+  assert.ok(cosineSimilarity(hit, low) < 0.55);
+
+  const vectors = new Map<string, number[]>([
+    ["HITTOKEN", hit],
+    ["NEARTOKEN", neighbor],
+    ["WEAKTOKEN", weak],
+    ["LOWTOKEN", low],
+  ]);
+  const embedding = embeddingFrom((text) => {
+    for (const [token, vector] of vectors) {
+      if (text.includes(token)) return vector;
+    }
+    if (text.includes("PROMPT")) return prompt;
+    return [0, -1, 0];
+  });
+  const memory = createMemoryApi(store, {
+    embedding,
+    spaces: memberSpaces(USER_A),
+    formulator: { async formulate() { return []; } },
+  });
+
+  const saved: Array<{ token: string; title: string }> = [
+    { token: "HITTOKEN", title: "Direct hit" },
+    { token: "NEARTOKEN", title: "Strong neighbor" },
+    { token: "WEAKTOKEN", title: "Weak neighbor" },
+    { token: "LOWTOKEN", title: "Below direct" },
+  ];
+  for (let index = 0; index < 6; index += 1) {
+    saved.push({ token: `FILLER${index}`, title: `Filler ${index}` });
+  }
+  for (const row of saved) {
+    const result = await memory.saveDashboardMemory(USER_A, {
+      project: "Vectors",
+      category: "fact",
+      title: row.title,
+      content: `${row.token} privatebody`,
+    }, PERSONAL);
+    assert.ok("data" in result);
+  }
+
+  const result = await memory.getContext(USER_A, { prompt: "PROMPT querywords" });
+  assert.ok("data" in result);
+  const titles = result.data.items.map((item) => item.title);
+  assert.deepEqual(titles.sort(), ["Direct hit", "Strong neighbor"]);
+  assert.ok(result.data.items.length < CONTEXT_ITEM_LIMIT);
+  assert.equal(titles.includes("Weak neighbor"), false);
+  assert.equal(titles.includes("Below direct"), false);
+});
+
+test("memories outside readable spaces stay hidden", async () => {
+  const store = createInMemoryStore();
+  const embedding = embeddingFrom(() => [1, 0, 0]);
+  const memory = createMemoryApi(store, {
+    embedding,
+    spaces: memberSpaces(USER_A, [PERSONAL]),
+    formulator: { async formulate() { return []; } },
+  });
+  await memory.saveDashboardMemory(USER_A, {
+    project: "Vectors",
+    category: "fact",
+    title: "Mine",
+    content: "raketmotor i mitt utrymme",
+  }, PERSONAL);
+  await store.upsertSubject(USER_A, {
+    spaceId: SHARED,
+    project: "Vectors",
+    category: "fact",
+    title: "Team secret",
+    content: "raketmotor i delat utrymme",
+    source: "dashboard",
+  });
+  await store.upsertSubject(USER_B, {
+    spaceId: OTHER,
+    project: "Vectors",
+    category: "fact",
+    title: "Stranger",
+    content: "raketmotor hos någon annan",
+    source: "dashboard",
+  });
+  await store.setEmbedding(
+    store.snapshot().find((row) => row.title === "Team secret")!.id,
+    [1, 0, 0],
+  );
+  await store.setEmbedding(
+    store.snapshot().find((row) => row.title === "Stranger")!.id,
+    [1, 0, 0],
+  );
+
+  const result = await memory.getContext(USER_A, { prompt: "raketmotor" });
+  assert.ok("data" in result);
+  assert.deepEqual(result.data.items.map((item) => item.title), ["Mine"]);
+});
+
+test("a new decision is stored as brain and stays visible in that space", async () => {
+  const store = createInMemoryStore();
+  const memory = createMemoryApi(store, {
+    embedding: embeddingFrom(() => [0, 1, 0]),
+    spaces: memberSpaces(USER_A),
+    formulator: {
+      async formulate() {
+        return [{
+          space: "personal",
+          project: "Boring Context",
+          category: "decision",
+          title: "Ship Friday",
+          content: "We ship the brain on Friday.",
+        }];
+      },
+    },
+  });
+
+  const result = await memory.getContext(USER_A, { prompt: "Ship the brain on Friday." });
+  assert.ok("data" in result);
+  assert.equal(result.data.written.length, 1);
+  assert.equal(result.data.written[0]?.space, "personal");
+  assert.equal(result.data.written[0]?.space_id, PERSONAL);
+  const row = store.snapshot().find((item) => item.title === "Ship Friday");
+  assert.equal(row?.source, "brain");
+  assert.equal(row?.user_id, USER_A);
+  const listed = await memory.searchInSpace(USER_A, PERSONAL, { query: "Friday" });
+  assert.ok("data" in listed);
+  assert.equal(listed.data[0]?.id, row?.id);
+});
+
+test("the same subject updates one row, versions the text, and refreshes the vector", async () => {
+  const store = createInMemoryStore();
+  const drafts: MemoryDraft[][] = [
+    [{
+      space: "personal",
+      project: "Boring Context",
+      category: "decision",
+      title: "Ship Friday",
+      content: "Ship on Friday.",
+    }],
+    [{
+      space: "personal",
+      project: "Boring Context",
+      category: "decision",
+      title: "Ship Friday",
+      content: "Ship on Monday.",
+    }],
+    [{
+      space: "personal",
+      project: "Boring Context",
+      category: "decision",
+      title: "Ship Friday",
+      content: "Ship on Monday.",
+    }],
+    [{
+      space: "personal",
+      project: "Boring Context",
+      category: "fact",
+      title: "Owner",
+      content: "Melker owns the brain.",
+    }],
+  ];
+  let step = 0;
+  const embedding = embeddingFrom((text) => text.includes("Monday") ? [0, 1, 0] : [1, 0, 0]);
+  const memory = createMemoryApi(store, {
+    embedding,
+    spaces: memberSpaces(USER_A),
+    formulator: { async formulate() { return drafts[step++] ?? []; } },
+  });
+
+  const first = await memory.getContext(USER_A, { prompt: "Remember the ship decision." });
+  const second = await memory.getContext(USER_A, { prompt: "The ship decision moved." });
+  assert.ok("data" in first && "data" in second);
+  const stamped = store.snapshot().find((item) => item.id === first.data.written[0]?.id);
+  const third = await memory.getContext(USER_A, { prompt: "The ship decision moved again." });
+  const fourth = await memory.getContext(USER_A, { prompt: "A different subject." });
+  assert.ok("data" in third && "data" in fourth);
+  assert.equal(second.data.written[0]?.id, first.data.written[0]?.id);
+  assert.equal(third.data.written[0]?.id, first.data.written[0]?.id);
+  assert.notEqual(fourth.data.written[0]?.id, first.data.written[0]?.id);
+
+  const versions = await memory.listVersions(USER_A, first.data.written[0]!.id);
+  assert.ok("data" in versions);
+  assert.equal(versions.data.length, 1);
+  assert.equal(versions.data[0]?.content, "Ship on Friday.");
+  assert.equal("embedding" in (versions.data[0] ?? {}), false);
+
+  const row = store.snapshot().find((item) => item.id === first.data.written[0]?.id);
+  assert.equal(row?.content, "Ship on Monday.");
+  assert.equal(row?.updated_at, stamped?.updated_at);
+  assert.deepEqual(row?.embedding, [0, 1, 0]);
+  assert.equal(store.snapshot().filter((item) => item.title === "Ship Friday").length, 1);
+  assert.equal(store.snapshot().length, 2);
+});
+
+test("Boring Context and Boringcontext are one project", async () => {
+  const store = createInMemoryStore();
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    embedding: embeddingFrom(() => [1, 0, 0]),
+    formulator: {
+      async formulate(): Promise<MemoryDraft[]> {
+        return [
+          {
+            space: "personal",
+            project: "Boring Context",
+            category: "fact",
+            title: "API path",
+            content: "The API lives in apps/api.",
+          },
+          {
+            space: "personal",
+            project: "Boringcontext",
+            category: "fact",
+            title: "Dashboard",
+            content: "The dashboard sends space_id.",
+          },
+        ];
+      },
+    },
+  });
+  const result = await memory.saveBrief(USER_A, { brief: "Notes about Boring Context." });
+  assert.ok("data" in result);
+  assert.equal(result.data.items.length, 2);
+  assert.deepEqual(store.snapshot().map((row) => row.project), ["Boring Context", "Boring Context"]);
+});
+
+test("a throwing formulator still returns items and writes nothing", async () => {
+  const store = createInMemoryStore();
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    embedding: embeddingFrom(() => [0, 1, 0]),
+    formulator: {
+      async formulate() {
+        throw new Error("formulate down");
+      },
+    },
+  });
+  await memory.saveDashboardMemory(USER_A, {
+    project: "Boring Context",
+    category: "fact",
+    title: "Raketmotor",
+    content: "Hemlig konstruktion.",
+  }, PERSONAL);
+  const before = store.snapshot().length;
+
+  const result = await memory.getContext(USER_A, { prompt: "Berätta om raketmotor" });
+  assert.ok("data" in result);
+  assert.equal(result.data.items[0]?.title, "Raketmotor");
+  assert.deepEqual(result.data.written, []);
+  assert.equal(store.snapshot().length, before);
+});
+
+test("save_memory stores each durable draft once and FORMULATE_FAILED writes nothing", async () => {
+  const store = createInMemoryStore();
+  let mode: "two" | "same" | "fail" = "two";
+  const formulator: MemoryFormulator = {
+    async formulate() {
+      if (mode === "fail") throw new Error("down");
+      if (mode === "same") {
+        return [
+          { space: "personal", project: "Boring Context", category: "fact", title: "API", content: "Routes stay stable." },
+          { space: "personal", project: "Boring Context", category: "decision", title: "Model", content: "Sonnet formulates." },
+        ];
+      }
+      return [
+        { space: "personal", project: "Boring Context", category: "fact", title: "API", content: "Routes stay stable." },
+        { space: "personal", project: "Boring Context", category: "decision", title: "Model", content: "Sonnet formulates." },
+      ];
+    },
+  };
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    embedding: embeddingFrom(() => [1, 0, 0]),
+    formulator,
+  });
+
+  const first = await memory.saveBrief(USER_A, {
+    brief: "The API routes stay stable. Sonnet formulates memories.",
+    prompt: "raw prompt that must not be stored",
+  });
+  assert.ok("data" in first);
+  assert.equal(first.data.items.length, 2);
+  mode = "same";
+  const second = await memory.saveBrief(USER_A, { brief: "The API routes stay stable. Sonnet formulates memories." });
+  assert.ok("data" in second);
+  assert.deepEqual(
+    second.data.items.map((item) => item.id).sort(),
+    first.data.items.map((item) => item.id).sort(),
+  );
+  assert.equal(
+    store.snapshot().some((row) => row.content.includes("raw prompt")),
+    false,
+  );
+  const count = store.snapshot().length;
+  mode = "fail";
+  const failed = await memory.saveBrief(USER_A, { brief: "This brief cannot be formulated." });
+  assert.ok("error" in failed);
+  assert.equal(failed.error.code, "FORMULATE_FAILED");
+  assert.equal(store.snapshot().length, count);
+});
+
+test("invalid drafts are skipped and at most eight rows are saved", async () => {
+  const store = createInMemoryStore();
+  const drafts: MemoryDraft[] = [
+    { space: "nope", project: "Boring Context", category: "fact", title: "Bad space", content: "Skip me." },
+    { space: "personal", project: "Boring Context", category: "nope", title: "Bad category", content: "Skip me." },
+  ];
+  for (let index = 0; index < 9; index += 1) {
+    drafts.push({
+      space: "personal",
+      project: "Boring Context",
+      category: "fact",
+      title: `Valid ${index}`,
+      content: `Durable fact ${index}.`,
+    });
+  }
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    embedding: embeddingFrom(() => [1, 0, 0]),
+    formulator: { async formulate() { return drafts; } },
+  });
+  const result = await memory.saveBrief(USER_A, { brief: "Nine facts and two invalid drafts." });
+  assert.ok("data" in result);
+  assert.equal(result.data.items.length, 8);
+  assert.equal(store.snapshot().length, 8);
+  assert.equal(store.snapshot().some((row) => row.title === "Bad space"), false);
+});
+
+test("embedding failure on write keeps the row and an embed failure on read stays lexical", async () => {
+  const store = createInMemoryStore();
+  let failEmbed = true;
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    embedding: {
+      dimensions: 3,
+      async embed() {
+        if (failEmbed) throw new Error("embed down");
+        return [1, 0, 0];
+      },
+    },
+    formulator: { async formulate() { return []; } },
+  });
+  const saved = await memory.saveDashboardMemory(USER_A, {
+    project: "Boring Context",
+    category: "fact",
+    title: "Raketmotor",
+    content: "Hemlig konstruktion.",
+  }, PERSONAL);
+  assert.ok("data" in saved);
+  assert.equal(store.snapshot()[0]?.embedding, null);
+
+  failEmbed = true;
+  const lexical = await memory.getContext(USER_A, { prompt: "raketmotor" });
+  assert.ok("data" in lexical);
+  assert.equal(lexical.data.items[0]?.title, "Raketmotor");
+});
+
+test("four fields without a brief are INVALID_CONTENT", async () => {
+  const store = createInMemoryStore();
+  let formulated = 0;
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    formulator: {
+      async formulate() {
+        formulated += 1;
+        return [];
+      },
+    },
+  });
+  const result = await memory.saveBrief(USER_A, {
+    project: "Boring Context",
+    category: "fact",
+    title: "API",
+    content: "Routes stay stable.",
+  });
+  assert.ok("error" in result);
+  assert.equal(result.error.code, "INVALID_CONTENT");
+  assert.equal(formulated, 0);
+  assert.equal(store.snapshot().length, 0);
+});
+
+test("shared is personal unless the text explicitly asks for shared", async () => {
+  const store = createInMemoryStore();
+  const seen: string[] = [];
+  const formulator: MemoryFormulator = {
+    async formulate(input) {
+      seen.push(input.text);
+      assert.equal("content" in (input.existing[0] ?? {}), false);
+      assert.equal("id" in (input.existing[0] ?? {}), false);
+      return [{
+        space: "shared",
+        project: "Boring Context",
+        category: "fact",
+        title: input.text.includes("shared") ? "Shared fact" : "Personal fact",
+        content: "Stored from the draft.",
+      }];
+    },
+  };
+  const memory = createMemoryApi(store, {
+    spaces: memberSpaces(USER_A),
+    embedding: embeddingFrom(() => [1, 0, 0]),
+    formulator,
+  });
+  const personal = await memory.saveBrief(USER_A, { brief: "Remember the API path." });
+  const shared = await memory.saveBrief(USER_A, { brief: "Please store this in the shared space." });
+  assert.ok("data" in personal && "data" in shared);
+  assert.equal(personal.data.items[0]?.space, "personal");
+  assert.equal(personal.data.items[0]?.space_id, PERSONAL);
+  assert.equal(shared.data.items[0]?.space, "shared");
+  assert.equal(shared.data.items[0]?.space_id, SHARED);
 });

@@ -241,6 +241,44 @@ class MemoriesQuery {
   }
 }
 
+class VersionsQuery {
+  #payload: Record<string, unknown> | null = null;
+  #filters: Filter[] = [];
+
+  constructor(private readonly versions: Array<Record<string, unknown>>) {}
+
+  insert(fields: Record<string, unknown>) {
+    this.#payload = fields;
+    this.versions.push(fields);
+    return this;
+  }
+
+  select(_columns: string) {
+    return this;
+  }
+
+  eq(column: string, value: unknown) {
+    this.#filters.push({ column, value });
+    return this;
+  }
+
+  order() {
+    return this;
+  }
+
+  then<TResult1 = QueryResult, TResult2 = never>(
+    onfulfilled?: ((value: QueryResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    const data = this.#payload
+      ? null
+      : this.versions.filter((row) =>
+          this.#filters.every((filter) => row[filter.column] === filter.value),
+        );
+    return Promise.resolve({ data, error: null }).then(onfulfilled, onrejected);
+  }
+}
+
 export function createFakeSupabase(options: FakeSupabaseOptions): { from: SupabaseClient["from"] } {
   const ctx: FakeContext = {
     userId: options.userId,
@@ -253,8 +291,10 @@ export function createFakeSupabase(options: FakeSupabaseOptions): { from: Supaba
     failDelete: options.failDelete ?? false,
   };
 
+  const versions: Array<Record<string, unknown>> = [];
   return {
     from: ((table: string) => {
+      if (table === "memory_versions") return new VersionsQuery(versions);
       if (table !== "memories") {
         throw new Error(`fake supabase only implements memories, got ${table}`);
       }
