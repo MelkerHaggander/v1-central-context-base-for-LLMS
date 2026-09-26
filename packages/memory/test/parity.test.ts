@@ -335,6 +335,7 @@ test("adapter IO failures keep Alfredo codes", async () => {
   const update = await updateApi.updateMemory(USER_A, {
     id: updateSaved.data.id,
     ...DEADLINE,
+    content: UPDATED_DEADLINE_CONTENT,
   });
   assert.ok("error" in update);
   assert.equal(update.error.code, "UPDATE_FAILED");

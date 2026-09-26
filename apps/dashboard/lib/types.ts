@@ -47,6 +47,7 @@ export type SearchInput = {
   category?: string;
   query?: string;
   offset?: number;
+  space_id?: string;
 };
 
 export type ApiError = { error: { code: string; message: string } };
