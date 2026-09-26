@@ -675,6 +675,7 @@ export type MemoryStore = {
   spaceOf?(memoryId: string): Promise<string | null>;
   removeById?(
     id: string,
+    changedBy: string,
   ): Promise<
     | { kind: "deleted" }
     | { kind: "missing" }
@@ -683,6 +684,7 @@ export type MemoryStore = {
   updateById?(
     id: string,
     fields: NormalizedMemoryInput,
+    changedBy: string,
   ): Promise<
     | { kind: "updated"; row: MemoryRecord }
     | { kind: "missing" }
@@ -1157,11 +1159,16 @@ export async function listMemoryVersions(
   return {
     data: versions.map((version) => ({
       version_number: version.version_number,
+      memory_id: version.memory_id,
       space_id: version.space_id,
+      changed_by: version.changed_by,
+      event: version.event,
       project: version.project,
       category: version.category,
-      title: version.title,
-      content: version.content,
+      title_before: version.title_before,
+      title_after: version.title_after,
+      content_before: version.content_before,
+      content_after: version.content_after,
       source: version.source,
       created_at: version.created_at,
     })),
@@ -1233,7 +1240,7 @@ export async function updateMemory(
   const inSpace = Boolean(brain?.spaces && store.spaceOf && (await store.spaceOf(idCheck.data)));
   const updated =
     inSpace && store.updateById
-      ? await store.updateById(idCheck.data, fields)
+      ? await store.updateById(idCheck.data, fields, userId)
       : await store.update(userId, idCheck.data, fields);
   if (updated.kind === "updated") {
     const textChanged =
@@ -1263,7 +1270,7 @@ export async function deleteMemory(
     if (spaceId) {
       const member = await spaces.isMember(userId, spaceId);
       if (!member) return fail("FORBIDDEN", "Du är inte medlem i det utrymmet.");
-      const removed = await store.removeById(idCheck.data);
+      const removed = await store.removeById(idCheck.data, userId);
       if (removed.kind === "deleted") return { data: { success: true } };
       if (removed.kind === "missing") {
         return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");

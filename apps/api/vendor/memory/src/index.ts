@@ -12,6 +12,7 @@ export {
   type MemorySource,
   type WrittenMemory,
   type MemoryVersion,
+  type MemoryVersionEvent,
   type MemoryIdentity,
   type MemoryDraft,
   type EmbeddingClient,

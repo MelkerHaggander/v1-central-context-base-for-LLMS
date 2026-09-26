@@ -1,5 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Category, MemoryRecord, MemorySource, MemoryVersion, SubjectWrite } from "./types";
+import type {
+  Category,
+  MemoryRecord,
+  MemorySource,
+  MemoryVersion,
+  MemoryVersionEvent,
+  SubjectWrite,
+} from "./types";
 import type { MemoryIdentity } from "./types";
 import type { MemoryStore, NearestHit, NormalizedMemoryInput } from "./store";
 import { cosineSimilarity } from "./brain";
@@ -12,7 +19,7 @@ type StoredRow = MemoryRecord & {
   embedding: number[] | null;
 };
 
-type StoredVersion = MemoryVersion & { memory_id: string };
+type StoredVersion = MemoryVersion;
 
 export type InMemoryStoreOptions = {
   now?: () => Date;
@@ -72,11 +79,16 @@ function sameIdentity(row: StoredRow, userId: string, fields: NormalizedMemoryIn
 function asVersion(version: StoredVersion): MemoryVersion {
   return {
     version_number: version.version_number,
+    memory_id: version.memory_id,
     space_id: version.space_id,
+    changed_by: version.changed_by,
+    event: version.event,
     project: version.project,
     category: version.category,
-    title: version.title,
-    content: version.content,
+    title_before: version.title_before,
+    title_after: version.title_after,
+    content_before: version.content_before,
+    content_after: version.content_after,
     source: version.source,
     created_at: version.created_at,
   };
@@ -92,19 +104,35 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
     return rows.find((candidate) => candidate.id === memoryId);
   }
 
-  function writeVersion(row: StoredRow, timestamp: string) {
+  function writeVersion(
+    row: StoredRow,
+    timestamp: string,
+    changedBy: string,
+    event: MemoryVersionEvent,
+    after: { title: string; content: string },
+  ) {
     const previous = versions.filter((version) => version.memory_id === row.id);
     versions.push({
       memory_id: row.id,
       version_number: previous.length + 1,
       space_id: row.space_id,
+      changed_by: changedBy,
+      event,
       project: row.project,
       category: row.category,
-      title: row.title,
-      content: row.content,
+      title_before: row.title,
+      title_after: after.title,
+      content_before: row.content,
+      content_after: after.content,
       source: row.source,
       created_at: timestamp,
     });
+  }
+
+  function historyFor(memoryId: string): StoredVersion[] {
+    return versions
+      .filter((version) => version.memory_id === memoryId)
+      .sort((a, b) => b.version_number - a.version_number);
   }
 
   function subjectRow(fields: SubjectWrite): StoredRow | undefined {
@@ -164,7 +192,12 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
 
       const timestamp = toIso(now());
       const textChanged = row.title !== fields.title || row.content !== fields.content;
-      if (textChanged) writeVersion(row, timestamp);
+      if (textChanged) {
+        writeVersion(row, timestamp, userId, "update", {
+          title: fields.title,
+          content: fields.content,
+        });
+      }
       row.project = fields.project;
       row.category = fields.category as MemoryRecord["category"];
       row.title = fields.title;
@@ -174,7 +207,7 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
       return { kind: "updated", row: asClient(row) };
     },
 
-    async updateById(memoryId, fields) {
+    async updateById(memoryId, fields, changedBy) {
       const row = findRow(memoryId);
       if (!row) return { kind: "missing" };
       if (
@@ -199,7 +232,12 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
 
       const timestamp = toIso(now());
       const textChanged = row.title !== fields.title || row.content !== fields.content;
-      if (textChanged) writeVersion(row, timestamp);
+      if (textChanged) {
+        writeVersion(row, timestamp, changedBy, "update", {
+          title: fields.title,
+          content: fields.content,
+        });
+      }
       row.project = fields.project;
       row.category = fields.category as MemoryRecord["category"];
       row.title = fields.title;
@@ -214,12 +252,10 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
         (candidate) => candidate.id === memoryId && candidate.user_id === userId,
       );
       if (index < 0) return { kind: "missing" };
-      const [removed] = rows.splice(index, 1);
-      if (removed) {
-        for (let cursor = versions.length - 1; cursor >= 0; cursor -= 1) {
-          if (versions[cursor]?.memory_id === removed.id) versions.splice(cursor, 1);
-        }
-      }
+      const removed = rows[index];
+      if (!removed) return { kind: "missing" };
+      writeVersion(removed, toIso(now()), userId, "delete", { title: "", content: "" });
+      rows.splice(index, 1);
       return { kind: "deleted" };
     },
 
@@ -289,7 +325,10 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
           return { kind: "unchanged", row: asClient(existing) };
         }
         const timestamp = toIso(now());
-        writeVersion(existing, timestamp);
+        writeVersion(existing, timestamp, userId, "update", {
+          title: existing.title,
+          content: fields.content,
+        });
         existing.content = fields.content;
         existing.updated_at = timestamp;
         existing.embedding = null;
@@ -325,24 +364,24 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
     },
 
     async listVersions(memoryId) {
-      if (!findRow(memoryId)) return null;
-      return versions
-        .filter((version) => version.memory_id === memoryId)
-        .sort((a, b) => b.version_number - a.version_number)
-        .map(asVersion);
+      const history = historyFor(memoryId);
+      if (!findRow(memoryId) && history.length === 0) return null;
+      return history.map(asVersion);
     },
 
     async spaceOf(memoryId) {
-      return findRow(memoryId)?.space_id ?? null;
+      const live = findRow(memoryId);
+      if (live) return live.space_id;
+      return historyFor(memoryId)[0]?.space_id ?? null;
     },
 
-    async removeById(memoryId) {
+    async removeById(memoryId, changedBy) {
       const index = rows.findIndex((candidate) => candidate.id === memoryId);
       if (index < 0) return { kind: "missing" };
+      const removed = rows[index];
+      if (!removed) return { kind: "missing" };
+      writeVersion(removed, toIso(now()), changedBy, "delete", { title: "", content: "" });
       rows.splice(index, 1);
-      for (let cursor = versions.length - 1; cursor >= 0; cursor -= 1) {
-        if (versions[cursor]?.memory_id === memoryId) versions.splice(cursor, 1);
-      }
       return { kind: "deleted" };
     },
 

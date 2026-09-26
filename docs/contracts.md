@@ -78,7 +78,7 @@ In: `{ "brief": string, "project"?: string, "prompt"?: string }`
 Ut vid lycka: `{ "items": [ { "id", "space", "space_id", "project", "category", "title" } ] }` utan `content`. Högst 8 rader. Ogiltiga utkast blir `skipped`.  
 Ut vid fel: `{ "error": { "code": string, "message": string } }` — får **aldrig** se ut som lyckad sparning. `FORMULATE_FAILED` skriver ingenting.
 
-Samma ämne (utrymme, projekt, kategori, titel) skriver över innehållet och lägger den tidigare texten i `memory_versions`. Identisk text skapar ingen ny version och ändrar inte `updated_at`. `source` sätts till `brain` vid skapande och ändras inte vid redigering.
+Samma ämne (utrymme, projekt, kategori, titel) skriver över innehållet. Varje sådan ändring lägger en rad i `memory_versions` med vem som ändrade, händelsen `update`, text före och text efter. Identisk text skapar ingen ny version och ändrar inte `updated_at`. `source` sätts till `brain` vid skapande och ändras inte vid redigering.
 
 ### `get_context`
 
@@ -132,7 +132,7 @@ In: `{ "id": string, "project": string, "category": string, "title": string, "co
 Ut vid lycka: uppdaterat minnesobjekt (`id` samma).  
 Ut vid fel (finns inte, tillhör annan användare, ogiltiga fält): error-objekt, aldrig ett “lyckat” minne.
 
-`id` måste vara ett UUID och får inte vara nil-UUID `00000000-0000-0000-0000-000000000000`. Alla minnesfält krävs; partiell uppdatering finns inte. Identisk text ändrar inte `updated_at` och skriver ingen version. Ändrad `title` eller `content` sätter nytt `updated_at` och sparar den tidigare texten som en version.
+`id` måste vara ett UUID och får inte vara nil-UUID `00000000-0000-0000-0000-000000000000`. Alla minnesfält krävs; partiell uppdatering finns inte. Identisk text ändrar inte `updated_at` och skriver ingen version. Ändrad `title` eller `content` sätter nytt `updated_at` och sparar en händelse `update`: vem som ändrade, från den inloggade användaren, plus text före och text efter.
 
 Ett ändrat `project` avvisas med `PROJECT_CHANGE_REQUIRES_FLAG` om inte anropet uttryckligen skickar `allow_project_change: true`. Flaggan får bara skickas för ett avsiktligt projektbyte. Ett vanligt minne får inte ändras till `category: "lesson"` via `update_memory`; det ger `LESSON_CATEGORY_REQUIRES_TOOL`. En befintlig lärdom får fortsätta ha `category: "lesson"` när den uppdateras.
 
@@ -173,7 +173,9 @@ Redigera från dashboarden använder `PATCH /api/memories/:id` med samma projekt
 
 Skapa från dashboarden är `POST /api/memories` med `space_id` plus `project`, `category`, `title` och `content`. Ingen formulerare. `source` sätts till `dashboard` bara när raden skapas och ändras inte vid redigering. Embedding räknas på `title`, radbrytning och `content` efter lyckad skrivning. Fallerar embed lämnas vektorn tom och skrivningen är ändå lyckad.
 
-`GET /api/memories/:id/versions` returnerar textversioner, nyast först. Varje post har `version_number`, `space_id`, `project`, `category`, `title`, `content`, `source` och `created_at`. Inga vektorer. Bara en medlem i utrymmet får listan.
+`DELETE /api/memories/:id` tar bort minnet ur sök och ur vektorer. Historiken ligger kvar. Raderingen skriver en händelse `delete` med vem som raderade, text före, och tom text efter.
+
+`GET /api/memories/:id/versions` returnerar textversioner, nyast först, även efter att minnet raderats. Varje post har `version_number`, `memory_id`, `space_id`, `changed_by`, `event` (`update` eller `delete`), `project`, `category`, `title_before`, `title_after`, `content_before`, `content_after`, `source` och `created_at`. Inga vektorer. Bara en medlem i utrymmet får listan. `memory_versions` har ingen `on delete cascade` mot `memories`.
 
 ## Hjärnans funktioner (Melker) — samma kontrakt
 

@@ -77,13 +77,20 @@ export type ContextResult = {
   written: WrittenMemory[];
 };
 
+export type MemoryVersionEvent = "update" | "delete";
+
 export type MemoryVersion = {
   version_number: number;
+  memory_id: string;
   space_id: string | null;
+  changed_by: string;
+  event: MemoryVersionEvent;
   project: string;
   category: Category;
-  title: string;
-  content: string;
+  title_before: string;
+  title_after: string;
+  content_before: string;
+  content_after: string;
   source: MemorySource | null;
   created_at: string;
 };

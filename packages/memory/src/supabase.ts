@@ -4,6 +4,7 @@ import type {
   MemoryRecord,
   MemorySource,
   MemoryVersion,
+  MemoryVersionEvent,
   SubjectWrite,
 } from "./types";
 import type { MemoryStore, NearestHit } from "./store";
@@ -13,7 +14,14 @@ const MEMORY_COLUMNS =
   "id, project, category, title, content, created_at, updated_at" as const;
 
 const VERSION_COLUMNS =
-  "version_number, space_id, project, category, title, content, source, created_at" as const;
+  "version_number, memory_id, space_id, changed_by, event, project, category, title_before, title_after, content_before, content_after, source, created_at" as const;
+
+const MEMORY_WITH_META = `${MEMORY_COLUMNS}, space_id, source` as const;
+
+type VersionSource = MemoryRecord & {
+  space_id?: string | null;
+  source?: MemorySource | null;
+};
 
 type Db = {
   from: SupabaseClient["from"];
@@ -35,11 +43,16 @@ function asMemory(row: MemoryRecord): MemoryRecord {
 function asVersion(row: MemoryVersion): MemoryVersion {
   return {
     version_number: row.version_number,
+    memory_id: row.memory_id,
     space_id: row.space_id,
+    changed_by: row.changed_by,
+    event: row.event,
     project: row.project,
     category: row.category,
-    title: row.title,
-    content: row.content,
+    title_before: row.title_before,
+    title_after: row.title_after,
+    content_before: row.content_before,
+    content_after: row.content_after,
     source: row.source,
     created_at: toIso(row.created_at),
   };
@@ -63,17 +76,24 @@ async function nextVersionNumber(client: Db, memoryId: string): Promise<number> 
 
 async function insertVersion(
   client: Db,
-  row: MemoryRecord & { space_id?: string | null; source?: MemorySource | null },
+  before: VersionSource,
+  after: { title: string; content: string },
+  changedBy: string,
+  event: MemoryVersionEvent,
 ): Promise<{ error: { message: string } | null }> {
-  const versionNumber = await nextVersionNumber(client, row.id);
+  const versionNumber = await nextVersionNumber(client, before.id);
   const inserted = await client.from("memory_versions").insert({
-    memory_id: row.id,
-    space_id: row.space_id ?? null,
-    project: row.project,
-    category: row.category,
-    title: row.title,
-    content: row.content,
-    source: row.source ?? null,
+    memory_id: before.id,
+    space_id: before.space_id ?? null,
+    changed_by: changedBy,
+    event,
+    project: before.project,
+    category: before.category,
+    title_before: before.title,
+    title_after: after.title,
+    content_before: before.content,
+    content_after: after.content,
+    source: before.source ?? null,
     version_number: versionNumber,
   });
   return { error: inserted.error };
@@ -106,17 +126,18 @@ export function createSupabaseStore(client: Db): MemoryStore {
       return existing.data ? asMemory(existing.data as MemoryRecord) : null;
     },
 
-    async update(_userId, id, fields) {
+    async update(userId, id, fields) {
       const existing = await client
         .from("memories")
-        .select(MEMORY_COLUMNS)
+        .select(MEMORY_WITH_META)
         .eq("id", id)
         .maybeSingle();
       if (existing.error) {
         return { kind: "failed", code: "UPDATE_FAILED", message: "Kunde inte uppdatera minnet." };
       }
       if (!existing.data) return { kind: "missing" };
-      const current = asMemory(existing.data as MemoryRecord);
+      const raw = existing.data as VersionSource;
+      const current = asMemory(raw);
       const unchanged =
         current.project === fields.project &&
         current.category === fields.category &&
@@ -125,7 +146,13 @@ export function createSupabaseStore(client: Db): MemoryStore {
       if (unchanged) return { kind: "updated", row: current };
 
       if (current.title !== fields.title || current.content !== fields.content) {
-        const versioned = await insertVersion(client, current);
+        const versioned = await insertVersion(
+          client,
+          raw,
+          { title: fields.title, content: fields.content },
+          userId,
+          "update",
+        );
         if (versioned.error) {
           return { kind: "failed", code: "UPDATE_FAILED", message: "Kunde inte uppdatera minnet." };
         }
@@ -145,11 +172,29 @@ export function createSupabaseStore(client: Db): MemoryStore {
       return { kind: "updated", row: asMemory(result.data as MemoryRecord) };
     },
 
-    async updateById(id, fields) {
-      return this.update("", id, fields);
+    async updateById(id, fields, changedBy) {
+      return this.update(changedBy, id, fields);
     },
 
-    async remove(_userId, id) {
+    async remove(userId, id) {
+      const existing = await client
+        .from("memories")
+        .select(MEMORY_WITH_META)
+        .eq("id", id)
+        .maybeSingle();
+      if (!existing.error && existing.data) {
+        const versioned = await insertVersion(
+          client,
+          existing.data as VersionSource,
+          { title: "", content: "" },
+          userId,
+          "delete",
+        );
+        if (versioned.error) {
+          return { kind: "failed", code: "DELETE_FAILED", message: "Kunde inte radera minnet." };
+        }
+      }
+
       const result = await client.from("memories").delete().eq("id", id).select("id").maybeSingle();
 
       if (result.error) {
@@ -159,8 +204,8 @@ export function createSupabaseStore(client: Db): MemoryStore {
       return { kind: "deleted" };
     },
 
-    async removeById(id) {
-      return this.remove("", id);
+    async removeById(id, changedBy) {
+      return this.remove(changedBy, id);
     },
 
     async listByUser(_userId) {
@@ -220,7 +265,7 @@ export function createSupabaseStore(client: Db): MemoryStore {
     async upsertSubject(userId, fields: SubjectWrite) {
       const existing = await client
         .from("memories")
-        .select(`${MEMORY_COLUMNS}, space_id, source`)
+        .select(MEMORY_WITH_META)
         .eq("space_id", fields.spaceId)
         .eq("project", fields.project)
         .eq("category", fields.category)
@@ -236,11 +281,17 @@ export function createSupabaseStore(client: Db): MemoryStore {
         if (current.content === fields.content) {
           return { kind: "unchanged", row: current };
         }
-        const versioned = await insertVersion(client, {
-          ...current,
-          space_id: meta.space_id ?? fields.spaceId,
-          source: meta.source ?? null,
-        });
+        const versioned = await insertVersion(
+          client,
+          {
+            ...current,
+            space_id: meta.space_id ?? fields.spaceId,
+            source: meta.source ?? null,
+          },
+          { title: current.title, content: fields.content },
+          userId,
+          "update",
+        );
         if (versioned.error) {
           return { kind: "failed", code: "SAVE_FAILED", message: "Kunde inte spara minnet." };
         }
@@ -303,9 +354,19 @@ export function createSupabaseStore(client: Db): MemoryStore {
         .select("space_id")
         .eq("id", memoryId)
         .maybeSingle();
-      if (result.error || !result.data) return null;
-      const spaceId = (result.data as { space_id?: string | null }).space_id;
-      return spaceId ?? null;
+      if (!result.error && result.data) {
+        const spaceId = (result.data as { space_id?: string | null }).space_id;
+        return spaceId ?? null;
+      }
+      const history = await client
+        .from("memory_versions")
+        .select("space_id, version_number")
+        .eq("memory_id", memoryId);
+      if (history.error || !history.data) return null;
+      const latest = (history.data as Array<{ space_id?: string | null; version_number?: number }>)
+        .slice()
+        .sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0];
+      return latest?.space_id ?? null;
     },
   };
 }

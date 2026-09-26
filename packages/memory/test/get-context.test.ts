@@ -875,7 +875,12 @@ test("the same subject updates one row, versions the text, and refreshes the vec
   const versions = await memory.listVersions(USER_A, first.data.written[0]!.id);
   assert.ok("data" in versions);
   assert.equal(versions.data.length, 1);
-  assert.equal(versions.data[0]?.content, "Ship on Friday.");
+  assert.equal(versions.data[0]?.event, "update");
+  assert.equal(versions.data[0]?.changed_by, USER_A);
+  assert.equal(versions.data[0]?.title_before, "Ship Friday");
+  assert.equal(versions.data[0]?.title_after, "Ship Friday");
+  assert.equal(versions.data[0]?.content_before, "Ship on Friday.");
+  assert.equal(versions.data[0]?.content_after, "Ship on Monday.");
   assert.equal("embedding" in (versions.data[0] ?? {}), false);
 
   const row = store.snapshot().find((item) => item.id === first.data.written[0]?.id);
@@ -884,6 +889,51 @@ test("the same subject updates one row, versions the text, and refreshes the vec
   assert.deepEqual(row?.embedding, [0, 1, 0]);
   assert.equal(store.snapshot().filter((item) => item.title === "Ship Friday").length, 1);
   assert.equal(store.snapshot().length, 2);
+});
+
+test("a deleted memory stays in history and drops out of search", async () => {
+  const store = createInMemoryStore();
+  const memory = createMemoryApi(store, { spaces: memberSpaces(USER_A) });
+  const created = await memory.saveDashboardMemory(
+    USER_A,
+    {
+      project: "Projekt A",
+      category: "decision",
+      title: "Stack",
+      content: "Första texten.",
+    },
+    PERSONAL,
+  );
+  assert.ok("data" in created);
+  const updated = await memory.updateMemory(USER_A, {
+    id: created.data.id,
+    project: "Projekt A",
+    category: "decision",
+    title: "Stack",
+    content: "Andra texten.",
+  });
+  assert.ok("data" in updated);
+  const removed = await memory.deleteMemory(USER_A, created.data.id);
+  assert.ok("data" in removed);
+
+  const listed = await memory.searchInSpace(USER_A, PERSONAL, { query: "texten" });
+  assert.ok("data" in listed);
+  assert.equal(listed.data.length, 0);
+  assert.equal(store.snapshot().some((row) => row.id === created.data.id), false);
+
+  const versions = await memory.listVersions(USER_A, created.data.id);
+  assert.ok("data" in versions);
+  assert.equal(versions.data.length, 2);
+  assert.equal(versions.data[0]?.event, "delete");
+  assert.equal(versions.data[0]?.changed_by, USER_A);
+  assert.equal(versions.data[0]?.content_before, "Andra texten.");
+  assert.equal(versions.data[0]?.content_after, "");
+  assert.equal(versions.data[0]?.title_after, "");
+  assert.equal(versions.data[1]?.event, "update");
+  assert.equal(versions.data[1]?.changed_by, USER_A);
+  assert.equal(versions.data[1]?.content_before, "Första texten.");
+  assert.equal(versions.data[1]?.content_after, "Andra texten.");
+  assert.equal("embedding" in (versions.data[0] ?? {}), false);
 });
 
 test("Boring Context and Boringcontext are one project", async () => {

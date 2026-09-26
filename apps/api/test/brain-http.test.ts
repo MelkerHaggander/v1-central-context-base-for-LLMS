@@ -259,15 +259,27 @@ describe("v1.2 brain HTTP and clients", () => {
 
     const versions = await getMemoryVersions("user-a", id, deps);
     assert.equal(versions.status, 200);
-    const body = versions.body as Array<{ version_number: number; content: string }>;
+    const body = versions.body as Array<{
+      version_number: number;
+      event: string;
+      changed_by: string;
+      content_before: string;
+      content_after: string;
+    }>;
     assert.deepEqual(
       body.map((version) => version.version_number),
       [2, 1],
     );
     assert.deepEqual(
-      body.map((version) => version.content),
+      body.map((version) => version.content_before),
       ["Andra texten.", "Första texten."],
     );
+    assert.deepEqual(
+      body.map((version) => version.content_after),
+      ["Tredje texten.", "Andra texten."],
+    );
+    assert.equal(body[0]?.event, "update");
+    assert.equal(body[0]?.changed_by, "user-a");
     assert.equal(JSON.stringify(body).includes("embedding"), false);
 
     const denied = await getMemoryVersions("user-b", id, {

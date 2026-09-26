@@ -42,15 +42,32 @@ test("v1.2 brain migration adds vectors, spaces and member RLS without deleting 
     /create unique index memories_identity_idx[\s\S]*\(space_id, project, category, title, md5\(content\)\)[\s\S]*where space_id is not null/i,
   );
   assert.match(brainMigration, /create table if not exists public\.memory_versions/i);
-  assert.match(brainMigration, /references public\.memories \(id\) on delete cascade/i);
   const versionTable =
     brainMigration.match(/create table if not exists public\.memory_versions \([\s\S]*?\);/i)?.[0] ??
     "";
   assert.doesNotMatch(versionTable, /embedding/i);
+  assert.doesNotMatch(versionTable, /on delete cascade/i);
+  assert.doesNotMatch(versionTable, /references public\.memories/i);
+  assert.match(versionTable, /changed_by uuid not null/i);
+  assert.match(versionTable, /event text not null/i);
+  assert.match(versionTable, /event in \('update', 'delete'\)/i);
+  assert.match(versionTable, /title_before text not null/i);
+  assert.match(versionTable, /title_after text not null/i);
+  assert.match(versionTable, /content_before text not null/i);
+  assert.match(versionTable, /content_after text not null/i);
   assert.match(brainMigration, /function public\.match_memories/i);
   assert.match(brainMigration, /memory\.space_id = any \(space_ids\)/i);
   assert.match(brainMigration, /from public\.space_members as member/i);
   assert.match(brainMigration, /member\.user_id = \(select auth\.uid\(\)\)/i);
+  assert.match(brainMigration, /function public\.mcp_upsert_subject/i);
+  assert.match(brainMigration, /function public\.mcp_list_nearest/i);
+  assert.match(brainMigration, /function public\.mcp_set_embedding/i);
+  assert.match(brainMigration, /function public\.mcp_list_versions/i);
+  assert.match(brainMigration, /p_access text/i);
+  assert.match(brainMigration, /uid := public\.mcp_session_owner\(p_access\)/i);
   assert.doesNotMatch(brainMigration, /delete from/i);
-  assert.doesNotMatch(brainMigration, /mcp_insert_memory|auth\.users[\s\S]{0,40}insert into/i);
+  assert.doesNotMatch(brainMigration, /create or replace function public\.mcp_insert_memory/i);
+  assert.doesNotMatch(brainMigration, /create or replace function public\.mcp_session_owner/i);
+  assert.doesNotMatch(brainMigration, /create or replace function public\.oauth_/i);
+  assert.doesNotMatch(brainMigration, /auth\.users[\s\S]{0,40}insert into/i);
 });
