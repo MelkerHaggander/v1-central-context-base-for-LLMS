@@ -40,6 +40,11 @@ function asMemory(row: MemoryRecord): MemoryRecord {
   };
 }
 
+function asListed(row: MemoryRecord & { source?: unknown }): MemoryRecord {
+  const source = row.source === "dashboard" || row.source === "brain" ? row.source : null;
+  return { ...asMemory(row), source };
+}
+
 function asVersion(row: MemoryVersion): MemoryVersion {
   return {
     version_number: row.version_number,
@@ -217,10 +222,10 @@ export function createSupabaseStore(client: Db): MemoryStore {
     async listBySpaces(_userId, spaceIds) {
       const result = await client
         .from("memories")
-        .select(MEMORY_COLUMNS)
+        .select(MEMORY_WITH_META)
         .in("space_id", spaceIds);
       if (result.error) throw new Error(result.error.message);
-      return ((result.data ?? []) as MemoryRecord[]).map(asMemory);
+      return ((result.data ?? []) as Array<MemoryRecord & { source?: unknown }>).map(asListed);
     },
 
     async listNearest(_userId, embedding, spaceIds, limit) {

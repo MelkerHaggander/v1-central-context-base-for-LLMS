@@ -487,7 +487,8 @@ begin
       'title', memory.title,
       'content', memory.content,
       'created_at', memory.created_at,
-      'updated_at', memory.updated_at
+      'updated_at', memory.updated_at,
+      'source', memory.source
     ))
     from public.memories as memory
     where memory.space_id = any (p_space_ids)

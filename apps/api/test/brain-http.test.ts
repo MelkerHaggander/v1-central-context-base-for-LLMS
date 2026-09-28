@@ -10,7 +10,7 @@ import {
   EMBEDDING_DIMENSIONS,
   formulatorRequest,
 } from "../lib/memory-clients";
-import { getMemories, getMemoryVersions, postMemory, patchMemory } from "../lib/memory-http";
+import { deleteMemoryHttp, getMemories, getMemoryVersions, postMemory, patchMemory } from "../lib/memory-http";
 import { createInMemoryStore } from "../vendor/memory/src/in-memory";
 import type { EmbeddingClient, MemoryFormulator, SpaceAccess } from "../vendor/memory/src/types";
 
@@ -209,8 +209,10 @@ describe("v1.2 brain HTTP and clients", () => {
       deps,
     );
     assert.equal(listed.status, 200);
-    const rows = listed.body as Array<{ title: string }>;
+    const rows = listed.body as Array<{ title: string; source?: string | null }>;
     assert.deepEqual(rows.map((row) => row.title), ["Lansering"]);
+    assert.equal(Object.prototype.hasOwnProperty.call(rows[0], "source"), true);
+    assert.equal(rows[0]?.source, "dashboard");
     assert.equal(reads, 0);
 
     const outsider = await getMemories(
@@ -287,5 +289,15 @@ describe("v1.2 brain HTTP and clients", () => {
       spaces: memberSpaces({ "user-a": [SPACE] }),
     });
     assert.equal(denied.status, 403);
+
+    const removed = await deleteMemoryHttp("user-a", id, deps);
+    assert.equal(removed.status, 200);
+    const afterDelete = await getMemoryVersions("user-a", id, deps);
+    assert.equal(afterDelete.status, 200);
+    const history = afterDelete.body as Array<{ event: string; changed_by: string; content_after: string }>;
+    assert.equal(history[0]?.event, "delete");
+    assert.equal(history[0]?.changed_by, "user-a");
+    assert.equal(history[0]?.content_after, "");
+    assert.equal(history.length, 3);
   });
 });

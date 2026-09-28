@@ -9,6 +9,8 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
+export type MemorySource = "dashboard" | "brain";
+
 export type MemoryRecord = {
   id: string;
   project: string;
@@ -17,6 +19,11 @@ export type MemoryRecord = {
   content: string;
   created_at: string;
   updated_at: string;
+  /**
+   * Set on space-list rows (`GET /api/memories`). `dashboard` or `brain` when
+   * the row was created that way, otherwise null. Absent on older list shapes.
+   */
+  source?: MemorySource | null;
 };
 
 export type MemoryInput = {
@@ -54,8 +61,6 @@ export type ContextItem = {
 };
 
 export type SpaceKind = "personal" | "shared";
-
-export type MemorySource = "dashboard" | "brain";
 
 export type WrittenMemory = {
   id: string;

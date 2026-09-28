@@ -41,7 +41,7 @@ export function asMemory(value: unknown): MemoryRecord | null {
   ) {
     return null;
   }
-  return {
+  const memory: MemoryRecord = {
     id: row.id,
     project: row.project,
     category: row.category as MemoryRecord["category"],
@@ -50,6 +50,10 @@ export function asMemory(value: unknown): MemoryRecord | null {
     created_at,
     updated_at,
   };
+  if ("source" in row) {
+    memory.source = row.source === "dashboard" || row.source === "brain" ? row.source : null;
+  }
+  return memory;
 }
 
 function asHit(value: unknown): NearestHit | null {

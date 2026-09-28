@@ -819,6 +819,8 @@ test("a new decision is stored as brain and stays visible in that space", async 
   const listed = await memory.searchInSpace(USER_A, PERSONAL, { query: "Friday" });
   assert.ok("data" in listed);
   assert.equal(listed.data[0]?.id, row?.id);
+  assert.equal(Object.prototype.hasOwnProperty.call(listed.data[0], "source"), true);
+  assert.equal(listed.data[0]?.source, "brain");
 });
 
 test("the same subject updates one row, versions the text, and refreshes the vector", async () => {

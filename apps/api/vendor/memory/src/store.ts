@@ -1142,8 +1142,11 @@ export async function listMemoryVersions(
   if (!store.listVersions || !store.spaceOf) {
     return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
   }
-  const spaceId = await store.spaceOf(idCheck.data);
-  if (!spaceId) {
+  const versions = await store.listVersions(idCheck.data);
+  const liveSpace = await store.spaceOf(idCheck.data);
+  const versionSpace = versions?.find((version) => version.space_id)?.space_id ?? null;
+  const spaceId = liveSpace ?? versionSpace;
+  if (!spaceId || !versions) {
     return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
   }
   if (spaces) {
@@ -1151,10 +1154,6 @@ export async function listMemoryVersions(
     if (!member) {
       return fail("FORBIDDEN", "Du är inte medlem i det utrymmet.");
     }
-  }
-  const versions = await store.listVersions(idCheck.data);
-  if (!versions) {
-    return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
   }
   return {
     data: versions.map((version) => ({

@@ -265,7 +265,9 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
 
     async listBySpaces(_userId, spaceIds) {
       const allowed = new Set(spaceIds);
-      return rows.filter((row) => row.space_id !== null && allowed.has(row.space_id)).map(asClient);
+      return rows
+        .filter((row) => row.space_id !== null && allowed.has(row.space_id))
+        .map((row) => ({ ...asClient(row), source: row.source }));
     },
 
     async listNearest(_userId, embedding, spaceIds, limit) {

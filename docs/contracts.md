@@ -173,9 +173,11 @@ Redigera från dashboarden använder `PATCH /api/memories/:id` med samma projekt
 
 Skapa från dashboarden är `POST /api/memories` med `space_id` plus `project`, `category`, `title` och `content`. Ingen formulerare. `source` sätts till `dashboard` bara när raden skapas och ändras inte vid redigering. Embedding räknas på `title`, radbrytning och `content` efter lyckad skrivning. Fallerar embed lämnas vektorn tom och skrivningen är ändå lyckad.
 
+`GET /api/memories?space_id=` returnerar listrader med samma fält som förut plus `source`: `dashboard`, `brain` eller `null`. Nyckeln finns även när värdet är null, så dashboarden kan skilja "saknas i svaret" från "okänt ursprung".
+
 `DELETE /api/memories/:id` tar bort minnet ur sök och ur vektorer. Historiken ligger kvar. Raderingen skriver en händelse `delete` med vem som raderade, text före, och tom text efter.
 
-`GET /api/memories/:id/versions` returnerar textversioner, nyast först, även efter att minnet raderats. Varje post har `version_number`, `memory_id`, `space_id`, `changed_by`, `event` (`update` eller `delete`), `project`, `category`, `title_before`, `title_after`, `content_before`, `content_after`, `source` och `created_at`. Inga vektorer. Bara en medlem i utrymmet får listan. `memory_versions` har ingen `on delete cascade` mot `memories`.
+`GET /api/memories/:id/versions` returnerar textversioner, nyast först, även efter att minnet raderats. Åtkomst kollas mot `space_id` på versionsraden när den gällande raden är borta. Varje post har `version_number`, `memory_id`, `space_id`, `changed_by`, `event` (`update` eller `delete`), `project`, `category`, `title_before`, `title_after`, `content_before`, `content_after`, `source` och `created_at`. Inga vektorer. Bara en medlem i utrymmet får listan. `memory_versions` har ingen `on delete cascade` mot `memories`.
 
 ## Hjärnans funktioner (Melker) — samma kontrakt
 
