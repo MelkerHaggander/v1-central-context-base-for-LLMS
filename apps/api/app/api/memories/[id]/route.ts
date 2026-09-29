@@ -1,18 +1,35 @@
-import { createMemoryApi, createSupabaseStore } from "@v1/memory";
+import { createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOwned } from "@/lib/http";
+import { deleteMemoryHttp, patchMemory } from "@/lib/memory-http";
+import { createBrainClients } from "@/lib/memory-clients";
+import { createSupabaseSpaceAccess } from "@/lib/space-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+
+async function requireUser() {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    return { error: jsonError("UNAUTHENTICATED", "Inte inloggad.", 401) };
+  }
+  return { supabase, userId: data.user.id };
+}
+
+function deps(supabase: { from: Parameters<typeof createSupabaseStore>[0]["from"] }) {
+  return {
+    store: createSupabaseStore(supabase),
+    spaces: createSupabaseSpaceAccess(supabase),
+    embedding: createBrainClients().embedding,
+  };
+}
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
-  }
+  const auth = await requireUser();
+  if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
   let body: Record<string, unknown>;
@@ -22,52 +39,26 @@ export async function PATCH(
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const api = createMemoryApi(createSupabaseStore(supabase));
-  const result = await api.updateMemory(data.user.id, {
-    id,
-    project: String(body.project ?? ""),
-    category: String(body.category ?? ""),
-    title: String(body.title ?? ""),
-    content: String(body.content ?? ""),
-    allow_project_change: body.allow_project_change === true,
-  });
-
-  if ("error" in result) {
-    const status =
-      result.error.code === "NOT_FOUND"
-        ? 404
-        : result.error.code.startsWith("INVALID_") ||
-            result.error.code === "PROJECT_CHANGE_REQUIRES_FLAG" ||
-            result.error.code === "LESSON_CATEGORY_REQUIRES_TOOL"
-          ? 400
-          : 500;
-    return jsonError(result.error.code, result.error.message, status);
+  const result = await patchMemory(auth.userId, id, body, deps(auth.supabase));
+  if (result.status >= 400) {
+    const errorBody = result.body as { error: { code: string; message: string } };
+    return jsonError(errorBody.error.code, errorBody.error.message, result.status);
   }
-  return jsonOwned(result.data, data.user.id);
+  return jsonOwned(result.body, auth.userId);
 }
 
 export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
-  }
+  const auth = await requireUser();
+  if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const api = createMemoryApi(createSupabaseStore(supabase));
-  const result = await api.deleteMemory(data.user.id, id);
-
-  if ("error" in result) {
-    const status =
-      result.error.code === "NOT_FOUND"
-        ? 404
-        : result.error.code.startsWith("INVALID_")
-          ? 400
-          : 500;
-    return jsonError(result.error.code, result.error.message, status);
+  const result = await deleteMemoryHttp(auth.userId, id, deps(auth.supabase));
+  if (result.status >= 400) {
+    const errorBody = result.body as { error: { code: string; message: string } };
+    return jsonError(errorBody.error.code, errorBody.error.message, result.status);
   }
-  return jsonOwned(result.data, data.user.id);
+  return jsonOwned(result.body, auth.userId);
 }

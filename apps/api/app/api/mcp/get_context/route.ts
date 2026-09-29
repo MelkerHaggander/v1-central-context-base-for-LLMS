@@ -1,5 +1,7 @@
 import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOk } from "@/lib/http";
+import { createBrainClients } from "@/lib/memory-clients";
+import { createSupabaseSpaceAccess } from "@/lib/space-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,11 @@ export async function POST(request: Request) {
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const api = createMemoryApi(createSupabaseStore(supabase));
+  const clients = createBrainClients();
+  const api = createMemoryApi(createSupabaseStore(supabase), {
+    ...clients,
+    spaces: createSupabaseSpaceAccess(supabase),
+  });
   const result = await api.getContext(data.user.id, {
     prompt: typeof body.prompt === "string" ? body.prompt : "",
     project: typeof body.project === "string" ? body.project : undefined,

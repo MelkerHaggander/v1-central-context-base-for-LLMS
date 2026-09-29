@@ -8,13 +8,16 @@ describe("MCP har inget radera-verktyg", () => {
     const src = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8");
     assert.equal(src.includes('"delete_memory"'), false);
     assert.equal(src.includes("'delete_memory'"), false);
-    assert.ok(src.includes('"save_memory"'));
-    assert.ok(src.includes('"update_memory"'));
-    assert.ok(src.includes('"lesson_memory"'));
+    assert.equal(src.includes('"update_memory"'), false);
+    assert.equal(src.includes('"lesson_memory"'), false);
+    const names = [...src.matchAll(/server\.tool\(\s*"([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(names, ["get_context", "save_memory"]);
   });
 
-  it("det finns ingen /api/mcp/delete_memory-rutt", () => {
+  it("HTTP-rutterna för update och lesson finns kvar, delete_memory gör det inte", () => {
     const names = readdirSync(join(__dirname, "../app/api/mcp"));
     assert.equal(names.includes("delete_memory"), false);
+    assert.equal(names.includes("update_memory"), true);
+    assert.equal(names.includes("lesson_memory"), true);
   });
 });

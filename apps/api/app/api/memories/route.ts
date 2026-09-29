@@ -1,5 +1,8 @@
-import { createMemoryApi, createSupabaseStore } from "@v1/memory";
+import { createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOwned } from "@/lib/http";
+import { getMemories, postMemory } from "@/lib/memory-http";
+import { createBrainClients } from "@/lib/memory-clients";
+import { createSupabaseSpaceAccess } from "@/lib/space-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -13,24 +16,24 @@ async function requireUser() {
   return { supabase, userId: data.user.id };
 }
 
+function deps(supabase: { from: Parameters<typeof createSupabaseStore>[0]["from"] }) {
+  return {
+    store: createSupabaseStore(supabase),
+    spaces: createSupabaseSpaceAccess(supabase),
+    embedding: createBrainClients().embedding,
+  };
+}
+
 export async function GET(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
 
-  const url = new URL(request.url);
-  const offsetRaw = url.searchParams.get("offset");
-  const api = createMemoryApi(createSupabaseStore(auth.supabase));
-  const result = await api.searchMemory(auth.userId, {
-    project: url.searchParams.get("project") ?? undefined,
-    category: url.searchParams.get("category") ?? undefined,
-    query: url.searchParams.get("query") ?? undefined,
-    offset: offsetRaw == null || offsetRaw === "" ? 0 : Number(offsetRaw),
-  });
-
-  if ("error" in result) {
-    return jsonError(result.error.code, result.error.message, 400);
+  const result = await getMemories(auth.userId, new URL(request.url), deps(auth.supabase));
+  if (result.status >= 400) {
+    const body = result.body as { error: { code: string; message: string } };
+    return jsonError(body.error.code, body.error.message, result.status);
   }
-  return jsonOwned(result.data, auth.userId);
+  return jsonOwned(result.body, auth.userId);
 }
 
 export async function POST(request: Request) {
@@ -44,17 +47,10 @@ export async function POST(request: Request) {
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const api = createMemoryApi(createSupabaseStore(auth.supabase));
-  const result = await api.saveMemory(auth.userId, {
-    project: String(body.project ?? ""),
-    category: String(body.category ?? ""),
-    title: String(body.title ?? ""),
-    content: String(body.content ?? ""),
-  });
-
-  if ("error" in result) {
-    const status = result.error.code.startsWith("INVALID_") ? 400 : 500;
-    return jsonError(result.error.code, result.error.message, status);
+  const result = await postMemory(auth.userId, body, deps(auth.supabase));
+  if (result.status >= 400) {
+    const errorBody = result.body as { error: { code: string; message: string } };
+    return jsonError(errorBody.error.code, errorBody.error.message, result.status);
   }
-  return jsonOwned(result.data, auth.userId, 201);
+  return jsonOwned(result.body, auth.userId, result.status);
 }

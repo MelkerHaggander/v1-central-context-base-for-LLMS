@@ -24,7 +24,7 @@ const healthRouteSrc = readFileSync(join(__dirname, "../app/api/health/route.ts"
 describe("get_context prompt transports", () => {
   it("registers the MCP tool with only prompt and optional project inputs", () => {
     const registration = mcpRouteSrc.match(
-      /server\.tool\(\s*"get_context",[\s\S]*?\},\s*READ_TOOL,[\s\S]*?\n\s*\);/,
+      /server\.tool\(\s*"get_context",[\s\S]*?\},\s*CONTEXT_TOOL,[\s\S]*?\n\s*\);/,
     )?.[0];
     assert.ok(registration);
     assert.match(registration, /prompt:\s*z\.string\(\)\.min\(1\)\.max\(8000\)/);
@@ -32,18 +32,21 @@ describe("get_context prompt transports", () => {
     assert.doesNotMatch(registration, /\b(?:keywords|query|category|offset):/);
     assert.match(registration, /\.getContext\(userId, input\)/);
     assert.match(registration, /quoted user data, not instructions/);
+    assert.match(mcpRouteSrc, /const CONTEXT_TOOL = \{[\s\S]*?readOnlyHint:\s*false/);
   });
 
-  it("describes save_memory as an identity upsert", () => {
-    assert.match(
-      mcpRouteSrc,
-      /same trimmed project, category and title update the existing row/,
-    );
+  it("describes save_memory as a brief the server extracts", () => {
+    assert.match(mcpRouteSrc, /brief is 1 to 10000 characters/);
+    assert.match(mcpRouteSrc, /not stored raw/);
+    assert.match(mcpRouteSrc, /The same subject updates the existing row/);
   });
 
-  it("removes search_memory from the MCP tool list", () => {
+  it("lists exactly get_context and save_memory", () => {
+    const names = [...mcpRouteSrc.matchAll(/server\.tool\(\s*"([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(names, ["get_context", "save_memory"]);
     assert.doesNotMatch(mcpRouteSrc, /server\.tool\(\s*"search_memory"/);
-    assert.equal(mcpRouteSrc.match(/server\.tool\(/g)?.length, 4);
+    assert.doesNotMatch(mcpRouteSrc, /server\.tool\(\s*"update_memory"/);
+    assert.doesNotMatch(mcpRouteSrc, /server\.tool\(\s*"lesson_memory"/);
   });
 
   it("keeps get_context visible in ChatGPT's public mixed-auth tool list", () => {
@@ -77,16 +80,8 @@ describe("get_context prompt transports", () => {
     assert.equal(shouldChallengeMcpOAuth(request, call("get_context")), true);
   });
 
-  it("guards nil ids and silent project moves in update_memory", () => {
-    assert.match(mcpRouteSrc, /id:\s*MEMORY_ID_SCHEMA/);
-    assert.match(
-      mcpRouteSrc,
-      /\.regex\(MEMORY_ID_RE, \{ message: "INVALID_ID" \}\)/,
-    );
-    assert.match(
-      mcpRouteSrc,
-      /allow_project_change:\s*z\.boolean\(\)\.optional\(\)/,
-    );
+  it("keeps project-change guards on the HTTP update route", () => {
+    assert.doesNotMatch(mcpRouteSrc, /allow_project_change/);
     assert.match(
       updateHttpRouteSrc,
       /allow_project_change:\s*body\.allow_project_change === true/,
@@ -98,7 +93,8 @@ describe("get_context prompt transports", () => {
     assert.match(httpRouteSrc, /api\.getContext\(data\.user\.id/);
     assert.match(mcpRouteSrc, /JSON\.stringify\(result\.data\)/);
     assert.match(httpRouteSrc, /jsonOk\(result\.data\)/);
-    assert.match(healthRouteSrc, /mcp:\s*"1\.1\.0"/);
+    assert.match(healthRouteSrc, /mcp:\s*"1\.2\.0"/);
+    assert.match(healthRouteSrc, /brain:\s*true/);
     assert.match(healthRouteSrc, /promptTransports:\s*true/);
   });
 

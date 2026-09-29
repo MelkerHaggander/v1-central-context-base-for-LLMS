@@ -81,6 +81,7 @@ export function session() {
 
 export async function searchMemories(params: SearchInput & { expectedUserId?: string }) {
   const search = new URLSearchParams();
+  if (params.space_id) search.set("space_id", params.space_id);
   if (params.project) search.set("project", params.project);
   if (params.category) search.set("category", params.category);
   if (params.query) search.set("query", params.query);
@@ -139,6 +140,7 @@ export type MemoryFields = {
   category: string;
   title: string;
   content: string;
+  space_id?: string;
 };
 
 async function writeRequest<T>(
@@ -262,7 +264,7 @@ export type AllMemories = {
  * `complete: false` rather than looping forever on a huge account.
  */
 export async function fetchAllMemories(
-  params: { project?: string; category?: string; query?: string; expectedUserId?: string } = {},
+  params: { project?: string; category?: string; query?: string; space_id?: string; expectedUserId?: string } = {},
 ): Promise<AllMemories | ApiError> {
   const memories: Memory[] = [];
   const seen = new Set<string>();
