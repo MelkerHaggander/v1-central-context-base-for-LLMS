@@ -59,4 +59,4 @@ export {
   textRequestsShared,
 } from "./brain";
 export { createInMemoryStore, contentFingerprint, type InMemoryStoreOptions } from "./in-memory";
-export { createSupabaseStore } from "./supabase";
+export { createSupabaseStore, vectorLiteral } from "./supabase";

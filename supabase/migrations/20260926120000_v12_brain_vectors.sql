@@ -67,9 +67,13 @@ create table if not exists public.memory_versions (
 create index if not exists memory_versions_memory_id_idx
   on public.memory_versions (memory_id, version_number desc);
 
-create index if not exists memories_embedding_cosine_idx
+-- HNSW on vector stops at 2000 dimensions. text-embedding-3-large is 3072.
+-- A vector index on that column rejects the write, so the embedding stays null.
+-- The column stays vector(3072). The index uses halfvec, which allows 4000.
+drop index if exists public.memories_embedding_cosine_idx;
+create index memories_embedding_cosine_idx
   on public.memories
-  using hnsw (embedding vector_cosine_ops);
+  using hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops);
 
 create or replace function public.match_memories(
   query_embedding vector(3072),
@@ -101,11 +105,11 @@ as $$
     memory.updated_at,
     memory.space_id,
     memory.source,
-    1 - (memory.embedding <=> query_embedding) as similarity
+    1 - ((memory.embedding::halfvec(3072)) <=> (query_embedding::halfvec(3072))) as similarity
   from public.memories as memory
   where memory.space_id = any (space_ids)
     and memory.embedding is not null
-  order by memory.embedding <=> query_embedding
+  order by (memory.embedding::halfvec(3072)) <=> (query_embedding::halfvec(3072))
   limit match_count;
 $$;
 
@@ -152,7 +156,7 @@ as $$
       neighbor.updated_at,
       neighbor.space_id,
       neighbor.source,
-      1 - (neighbor.embedding <=> seed.embedding) as similarity
+      1 - ((neighbor.embedding::halfvec(3072)) <=> (seed.embedding::halfvec(3072))) as similarity
     from public.memories as seed
     join public.memories as neighbor
       on neighbor.id <> seed.id
@@ -160,8 +164,8 @@ as $$
      and neighbor.embedding is not null
     where seed.id = any (seed_ids)
       and seed.embedding is not null
-      and 1 - (neighbor.embedding <=> seed.embedding) >= min_similarity
-    order by neighbor.id, neighbor.embedding <=> seed.embedding
+      and 1 - ((neighbor.embedding::halfvec(3072)) <=> (seed.embedding::halfvec(3072))) >= min_similarity
+    order by neighbor.id, (neighbor.embedding::halfvec(3072)) <=> (seed.embedding::halfvec(3072))
   ) as ranked
   order by ranked.similarity desc
   limit match_count;
@@ -539,7 +543,7 @@ begin
         memory.content,
         memory.created_at,
         memory.updated_at,
-        1 - (memory.embedding <=> p_query_embedding) as similarity
+        1 - ((memory.embedding::halfvec(3072)) <=> (p_query_embedding::halfvec(3072))) as similarity
       from public.memories as memory
       where memory.space_id = any (p_space_ids)
         and memory.embedding is not null
@@ -549,7 +553,7 @@ begin
           where member.space_id = memory.space_id
             and member.user_id = uid
         )
-      order by memory.embedding <=> p_query_embedding
+      order by (memory.embedding::halfvec(3072)) <=> (p_query_embedding::halfvec(3072))
       limit p_match_count
     ) as hit
   ), '[]'::jsonb);
@@ -604,7 +608,7 @@ begin
           neighbor.content,
           neighbor.created_at,
           neighbor.updated_at,
-          1 - (neighbor.embedding <=> seed.embedding) as similarity
+          1 - ((neighbor.embedding::halfvec(3072)) <=> (seed.embedding::halfvec(3072))) as similarity
         from public.memories as seed
         join public.memories as neighbor
           on neighbor.id <> seed.id
@@ -618,8 +622,8 @@ begin
          )
         where seed.id = any (p_seed_ids)
           and seed.embedding is not null
-          and 1 - (neighbor.embedding <=> seed.embedding) >= p_min_similarity
-        order by neighbor.id, neighbor.embedding <=> seed.embedding
+          and 1 - ((neighbor.embedding::halfvec(3072)) <=> (seed.embedding::halfvec(3072))) >= p_min_similarity
+        order by neighbor.id, (neighbor.embedding::halfvec(3072)) <=> (seed.embedding::halfvec(3072))
       ) as ranked
       order by ranked.similarity desc
       limit p_match_count

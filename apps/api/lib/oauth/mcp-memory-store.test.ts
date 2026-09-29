@@ -89,7 +89,8 @@ test("MCP token store saves a subject, embedding and nearest hit through access 
   assert.equal(calls[0]?.args.p_space_id, spaceId);
   assert.equal(calls[0]?.args.p_source, "brain");
   assert.equal(calls[1]?.args.p_access, "opaque-token");
-  assert.deepEqual(calls[1]?.args.p_embedding, [0.2, 0.8]);
+  assert.equal(calls[1]?.args.p_embedding, "[0.2,0.8]");
+  assert.equal(calls[2]?.args.p_query_embedding, "[0.2,0.8]");
   assert.equal(calls[2]?.args.p_access, "opaque-token");
   assert.deepEqual(calls[2]?.args.p_space_ids, [spaceId]);
 

@@ -1,5 +1,6 @@
 import {
   toIso,
+  vectorLiteral,
   type MemoryIdentity,
   type MemoryRecord,
   type MemoryStore,
@@ -208,7 +209,7 @@ export function createMcpTokenStore(mcpAccess: string, supabase: McpRpcClient = 
     async listNearest(_userId, embedding, spaceIds, limit) {
       const { data, error } = await supabase.rpc("mcp_list_nearest", {
         p_access: mcpAccess,
-        p_query_embedding: embedding,
+        p_query_embedding: vectorLiteral(embedding),
         p_space_ids: spaceIds,
         p_match_count: limit,
       });
@@ -260,10 +261,13 @@ export function createMcpTokenStore(mcpAccess: string, supabase: McpRpcClient = 
     },
 
     async setEmbedding(id, embedding) {
+      if (!embedding || embedding.length === 0) {
+        throw new Error("embedding was not stored");
+      }
       const { error } = await supabase.rpc("mcp_set_embedding", {
         p_access: mcpAccess,
         p_id: id,
-        p_embedding: embedding,
+        p_embedding: vectorLiteral(embedding),
       });
       if (error) throw new Error(error.message);
     },

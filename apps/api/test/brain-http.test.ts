@@ -59,6 +59,10 @@ describe("v1.2 brain HTTP and clients", () => {
       existing: [],
     });
     assert.equal(formulated.temperature, 0);
+    assert.match(
+      formulated.system,
+      /A rule for how to answer next time is lesson, not preference/,
+    );
     assert.deepEqual(formulated.thinking, { type: "disabled" });
     assert.equal(formulated.tools.length, 1);
     assert.equal(formulated.model, "claude-sonnet");

@@ -53,6 +53,7 @@ export function formulatorRequest(model: string, input: FormulateInput) {
       "Never send a raw space id.",
       "Reuse an existing project, category and title when it is the same subject.",
       "Do not change category or project on an existing subject.",
+      "A rule for how to answer next time is lesson, not preference.",
       "Do not store secrets or a secret filter the user rejected.",
       "An empty list is valid.",
       "Return at most 8 memories.",

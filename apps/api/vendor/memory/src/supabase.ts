@@ -18,6 +18,17 @@ const VERSION_COLUMNS =
 
 const MEMORY_WITH_META = `${MEMORY_COLUMNS}, space_id, source` as const;
 
+// PostgREST rejects a JSON array cast onto vector(3072). The pgvector
+// literal is what the column accepts, including under the halfvec index.
+export function vectorLiteral(embedding: number[]): string {
+  return `[${embedding.map((value) => Number(value)).join(",")}]`;
+}
+
+function embeddingPresent(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return typeof value === "string" && value.startsWith("[") && value.endsWith("]") && value.length > 2;
+}
+
 type VersionSource = MemoryRecord & {
   space_id?: string | null;
   source?: MemorySource | null;
@@ -231,7 +242,7 @@ export function createSupabaseStore(client: Db): MemoryStore {
     async listNearest(_userId, embedding, spaceIds, limit) {
       if (!client.rpc) throw new Error("match_memories unavailable");
       const result = await client.rpc("match_memories", {
-        query_embedding: embedding,
+        query_embedding: vectorLiteral(embedding),
         space_ids: spaceIds,
         match_count: limit,
       });
@@ -332,15 +343,26 @@ export function createSupabaseStore(client: Db): MemoryStore {
     },
 
     async setEmbedding(id, embedding) {
-      const result = await client.from("memories").update({ embedding }).eq("id", id);
+      if (!embedding || embedding.length === 0) {
+        throw new Error("embedding was not stored");
+      }
+      const result = await client
+        .from("memories")
+        .update({ embedding: vectorLiteral(embedding) })
+        .eq("id", id)
+        .select("id");
       if (result.error) throw new Error(result.error.message);
+      const stored = result.data as unknown[] | null;
+      if (!stored || stored.length === 0) {
+        throw new Error("embedding was not stored");
+      }
     },
 
     async hasEmbedding(id) {
       const result = await client.from("memories").select("embedding").eq("id", id).maybeSingle();
       if (result.error) throw new Error(result.error.message);
       const embedding = (result.data as { embedding?: unknown } | null)?.embedding;
-      return Array.isArray(embedding) && embedding.length > 0;
+      return embeddingPresent(embedding);
     },
 
     async listVersions(memoryId) {
