@@ -1,45 +1,39 @@
-# v1-central-context-base-for-LLMS
+# BoringContext
 
-Privat molnminne för **Claude Desktop**. Claude sparar och hämtar via tre MCP-verktyg. Varje konto ser bara sitt eget minne.
+Private memory for a language model. The model calls two MCP tools. The server decides what to store, which project it belongs to, and whether it is personal or shared.
 
-TypeScript. **Vercel** + **Supabase** (Stockholm). Ingen Python, worker, kö, Cron eller vektordatabas.
+## Tools
 
-Hur man loggar in och kopplar Claude står i Confluence, inte här.
+`tools/list` is only `get_context` and `save_memory`.
 
-## Live — gren `integration/v1.1`
+- `get_context` takes the user's full message (`prompt`, optional `project`). It returns ranked snippets and may save durable notes. `written` says where each note landed. It does not return `user_id` or the full text.
+- `save_memory` takes a `brief` when the work is finished. The same subject (space, project, category, title) updates that row and keeps the previous text in history. An identical text does not change `updated_at`.
 
-Ett Vercel-projekt. Root Directory är `apps/api`. Inte `main` (404). Inte ett andra projekt. Inte Root Directory `apps/dashboard`.
+There is no MCP delete. The dashboard deletes. HTTP routes for update, lesson, and search remain; they are not MCP tools.
 
-| Vad | Adress |
-| --- | --- |
-| Dashboard | https://v1-central-context-base-for-llms.vercel.app |
-| MCP | `https://v1-central-context-base-for-llms.vercel.app/api/mcp` |
-| Vercel | https://vercel.com/barrettaalfredo-hues-projects/v1-central-context-base-for-llms |
+A note is personal unless the text explicitly asks for shared. Direct vector hits use similarity `0.35`. A neighbor of a direct hit uses `0.55`. If the embedding is missing or the embed call fails, retrieval stays on the lexical ranking.
 
-MCP-adressen är production-aliaset. Den byts **inte** när ni mergar till `integration/v1.1`. Klistra inte in unika `-git-` eller hash-URL:er.
+Fields, lengths, and error codes are in [docs/contracts.md](docs/contracts.md).
 
-`main` rörs inte förrän [docs/torsdag-test.md](docs/torsdag-test.md) är grön.
+## Run the API
 
-## Kod
-
-| Mapp | Ägare | Vad |
-| --- | --- | --- |
-| `apps/api/` | Alfredo | Auth, API, fjärr-MCP. Visar också Filips UI (`/`, `/dashboard`, `/anslut`) |
-| `apps/dashboard/` | Filip | UI-källa (komponenter). Live-ytan är `apps/api` |
-| `packages/memory/` | Melker | Spara, söka, uppdatera. Samma funktioner för dashboard och MCP |
-
-```
-Claude Desktop  ↔  fjärr-MCP (Vercel)  ↔  @v1/memory  ↔  Supabase
-                                              ↑
-                                     Dashboarden läser samma rader
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+python -m boringcontext
 ```
 
-Daglig kod: `alfredo/integrations`, `filip/dashboard`, `melker/memory`. Ihopkoppling: `integration/v1.1`.
+The process listens on `http://127.0.0.1:8000`. `POST /api/mcp` speaks JSON-RPC. `GET /api/health` reports `mcp: 1.2.0`.
 
-## Kontrakt
+This local process uses an in-memory store and does not call Supabase. Pass a bearer token that you have registered in `create_app(..., sessions={token: user_id})` when you embed the app. Do not commit `.env` files or keys.
 
-Tre verktyg: `save_memory`, `search_memory`, `update_memory`. Ägare = inloggning, aldrig ett id Claude skickar.
+```bash
+pytest
+```
 
-Kategorier: `fact`, `decision`, `goal`, `deadline`, `preference`. Format: [docs/contracts.md](docs/contracts.md). Testdagens Claude-block (byte-låst): [docs/claude-instruktioner.md](docs/claude-instruktioner.md).
+The tests stay offline.
 
-Tre förskapade konton, ingen publik registrering. Env: [docs/supabase-setup.md](docs/supabase-setup.md).
+## Dashboard
+
+The globe and the rest of the interface stay in `apps/api` and `apps/dashboard`. That UI is React and a client-side canvas. Rewriting it in Python would change how it looks and how it moves, so it is unchanged. `npm` scripts in those apps are the way to open it. The Python package is the memory brain and the HTTP API with the same JSON.
