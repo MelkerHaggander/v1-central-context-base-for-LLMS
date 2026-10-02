@@ -568,3 +568,37 @@ async def test_project_noise_vectors_and_hidden_spaces():
         await private.set_embedding(next(row["id"] for row in private.snapshot() if row["title"] == title), [1, 0, 0])
     visible = await hidden.get_context(USER_A, {"prompt": "raketmotor"})
     assert [item["title"] for item in visible["data"]["items"]] == ["Mine"]
+
+
+@pytest.mark.asyncio
+async def test_project_filter_rejects_another_name_and_keeps_hyphen_spelling():
+    store = InMemoryStore()
+    memory = create_memory_api(
+        store,
+        Brain(spaces=Spaces(USER_A), embedding=Embed(lambda _text: [1, 0, 0]), formulator=Formulator(lambda _payload: _empty())),
+    )
+    await memory.save_dashboard_memory(
+        USER_A,
+        {
+            "project": "Testprojekt 2026-10-02",
+            "category": "fact",
+            "title": "Silvernot",
+            "content": "SILVER-2026-10-02 ligger i testprojektet.",
+        },
+        PERSONAL,
+    )
+    other = await memory.get_context(
+        USER_A,
+        {"prompt": "Vad gäller SILVER-2026-10-02?", "project": "Annatprojekt 2026-10-02"},
+    )
+    assert other["data"]["items"] == []
+    assert other["data"]["project"] == "Annatprojekt 2026-10-02"
+    assert "projects" not in other["data"]
+    assert all(item["project"] != "Testprojekt 2026-10-02" for item in other["data"]["items"])
+
+    for typed in ("Testprojekt-2026-10-02", "Testprojekt  2026-10-02", "testprojekt 2026-10-02"):
+        hit = await memory.get_context(USER_A, {"prompt": "Vad gäller SILVER-2026-10-02?", "project": typed})
+        assert hit["data"]["project"] == "Testprojekt 2026-10-02"
+        assert [item["project"] for item in hit["data"]["items"]] == ["Testprojekt 2026-10-02"]
+
+    assert extract_keywords("SILVER-2026-10-02") == ["silver", "2026", "10", "02"]

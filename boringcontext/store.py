@@ -12,6 +12,7 @@ from boringcontext.brain import (
     project_key,
     rank_sort_key,
     recent_identities,
+    shared_save_plan,
 )
 from boringcontext.jsonutil import js_json
 from boringcontext.validate import fail, validate_memory_id, validate_memory_input, validate_search_input
@@ -547,12 +548,13 @@ async def get_context(user_id: str, context: dict | None, store: Any, brain: Any
 
     projects = compact_projects(rows) if context is not None and "project" not in context else None
     response_project = context.get("project") if context else None
+    project_filter = None
     if context is not None and "project" in context:
-        key = project_key(str(context.get("project") or ""))
-        spelled = next((row for row in rows if project_key(row["project"]) == key), None)
+        project_filter = project_key(str(context.get("project") or ""))
+        spelled = next((row for row in rows if project_key(row["project"]) == project_filter), None)
         if spelled is not None:
             response_project = spelled["project"]
-        rows = [row for row in rows if project_key(row["project"]) == key]
+        rows = [row for row in rows if project_key(row["project"]) == project_filter]
 
     keywords = extract_keywords(prompt)
     cues = category_cues(prompt)
@@ -621,6 +623,11 @@ async def get_context(user_id: str, context: dict | None, store: Any, brain: Any
         except Exception:
             # Missing embedding column, or a failed embed call, keeps lexical ranking.
             pass
+
+    if project_filter is not None:
+        # Nearest neighbors are not limited to the requested project. Drop them
+        # after ranking so a different name cannot ride in on a similar vector.
+        ranked = [candidate for candidate in ranked if project_key(candidate["row"]["project"]) == project_filter]
 
     duplicate_omitted = sum(duplicate_counts.get(candidate["key"], 0) for candidate in ranked)
     packed_keywords = output_keywords(keywords, response_project, projects, duplicate_omitted, len(ranked))
@@ -711,6 +718,17 @@ async def save_brief(user_id: str, brief: dict, store: Any, brain: Any | None = 
         space_ids = await _maybe(spaces.readable_space_ids(user_id)) if spaces is not None else []
     except Exception:
         space_ids = []
+    prompt = brief.get("prompt") or ""
+    joined = "\n".join(part for part in (text, prompt) if part)
+    listed: list[dict] = []
+    list_spaces = getattr(spaces, "list_spaces", None) if spaces is not None else None
+    if list_spaces is not None:
+        try:
+            listed = await _maybe(list_spaces(user_id)) or []
+        except Exception:
+            listed = []
+    if shared_save_plan(joined, listed)["mode"] == "ask":
+        return fail("TEAM_CHOICE", "Vilket team ska minnet sparas i?")
     try:
         existing = await recent_identities(user_id, space_ids, store)
         payload = {
@@ -725,8 +743,6 @@ async def save_brief(user_id: str, brief: dict, store: Any, brain: Any | None = 
         drafts = await _maybe(formulator.formulate(payload))
     except Exception:
         return fail("FORMULATE_FAILED", "Kunde inte tolka minnet.")
-    prompt = brief.get("prompt") or ""
-    joined = "\n".join(part for part in (text, prompt) if part)
     items = await persist_drafts(
         user_id=user_id,
         drafts=drafts,

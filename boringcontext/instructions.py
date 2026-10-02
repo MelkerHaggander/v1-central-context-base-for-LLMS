@@ -46,8 +46,10 @@ extraction context: it is not stored raw and it is not required.
 
 Do not send project, category, title and content in place of brief. Those four
 fields belong to the dashboard. The server chooses the category. The server
-chooses personal unless the text explicitly asks for shared. The server does
-not change the category or project of an existing row.
+chooses personal unless the text asks for the shared space. One shared space
+then receives the row. Several teams and no named team: the server saves
+nothing and asks which team. With no shared space, the row stays personal.
+The server does not change the category or project of an existing row.
 
 Show the user where each saved memory landed: space, project, category and title.
 
@@ -114,9 +116,6 @@ MCP_TOOLS = [
                 "brief": {"type": "string"},
                 "project": {"type": "string", "maxLength": 100},
                 "prompt": {"type": "string", "maxLength": 8000},
-                "category": {"type": "string"},
-                "title": {"type": "string"},
-                "content": {"type": "string"},
             },
             "additionalProperties": False,
         },

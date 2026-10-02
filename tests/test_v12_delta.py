@@ -60,6 +60,24 @@ async def test_one_team_is_shared_only_when_the_text_asks():
     assert personal["data"]["items"][0]["space_id"] == PERSONAL
     assert swedish["data"]["items"][0]["space_id"] == SHARED
     assert asked["data"]["items"][0]["space_id"] == SHARED
+    for brief in (
+        "Detta är gemensam för teamet. Lanseringen står fast.",
+        "Lägg minnet i det gemensamma utrymmet.",
+        "Spara detta i det gemensamma.",
+    ):
+        landed = await memory.save_brief(USER_A, {"brief": brief})
+        assert landed["data"]["items"][0]["space"] == "shared"
+        assert landed["data"]["items"][0]["space_id"] == SHARED
+
+
+@pytest.mark.asyncio
+async def test_shared_request_without_a_team_stays_personal():
+    memory = create_memory_api(InMemoryStore(), Brain(Spaces([])))
+    saved = await memory.save_brief(USER_A, {"brief": "Detta är gemensam för teamet."})
+    assert saved["data"]["items"][0]["space"] == "personal"
+    assert saved["data"]["items"][0]["space_id"] == PERSONAL
+    meeting = await memory.save_brief(USER_A, {"brief": "Det gemensamma mötet var bra."})
+    assert meeting["data"]["items"][0]["space_id"] == PERSONAL
 
 
 @pytest.mark.asyncio
@@ -72,10 +90,15 @@ async def test_several_teams_need_a_name_next_to_the_save():
         ])),
     )
     unnamed = await memory.save_brief(USER_A, {"brief": "Ja, spara i teamet."})
+    asked = await memory.save_brief(USER_A, {"brief": "Detta är gemensam för teamet."})
     named = await memory.save_brief(USER_A, {"brief": "Ja, spara i teamet Beta."})
-    assert unnamed["data"]["items"][0]["space_id"] == PERSONAL
+    assert unnamed["error"]["code"] == "TEAM_CHOICE"
+    assert asked["error"]["code"] == "TEAM_CHOICE"
+    assert "items" not in unnamed
     assert named["data"]["items"][0]["space_id"] == BETA
     assert text_confirms_team_save("Spara detta gemensamt.") is True
+    assert text_confirms_team_save("Detta är gemensam för teamet.") is True
+    assert text_confirms_team_save("Lägg minnet i det gemensamma utrymmet.") is True
     assert text_confirms_team_save("Det gemensamma mötet var bra.") is False
     assert choose_shared_space("Ja, spara i teamet Alpha.", [
         {"id": ALPHA, "kind": "shared", "name": "Alpha"},

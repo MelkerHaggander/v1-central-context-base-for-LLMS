@@ -38,6 +38,14 @@ describe("get_context prompt transports", () => {
     assert.match(mcpRouteSrc, /brief is 1 to 10000 characters/);
     assert.match(mcpRouteSrc, /not stored raw/);
     assert.match(mcpRouteSrc, /The same subject updates the existing row/);
+    const registration = mcpRouteSrc.match(
+      /server\.tool\(\s*"save_memory",[\s\S]*?\},\s*WRITE_TOOL,/,
+    )?.[0];
+    assert.ok(registration);
+    assert.match(registration, /brief:\s*z\.string\(\)\.optional\(\)/);
+    assert.match(registration, /project:\s*z\.string\(\)\.max\(100\)\.optional\(\)/);
+    assert.match(registration, /prompt:\s*z\.string\(\)\.max\(8000\)\.optional\(\)/);
+    assert.doesNotMatch(registration, /\b(?:category|title|content):/);
   });
 
   it("lists exactly get_context and save_memory", () => {

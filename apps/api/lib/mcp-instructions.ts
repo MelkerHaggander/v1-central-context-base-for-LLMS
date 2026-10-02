@@ -51,9 +51,10 @@ extraction context: it is not stored raw and it is not required.
 
 Do not send project, category, title and content in place of brief. Those four
 fields belong to the dashboard. The server chooses the category. The server
-chooses personal by default. Asking to save to the team, shared memory, or
+chooses personal by default. Asking for the shared space, the team, or
 "gemensamt" selects the shared space when the user has one team. With more
-than one team, the memory stays personal unless the text names that team. The
+than one team, the server does not guess: it saves nothing until the text
+names that team. With no shared space, the memory stays personal. The
 server does not change the category or project of an existing row.
 
 Show the user where each saved memory landed: space, project, category and title.

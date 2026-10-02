@@ -22,6 +22,14 @@ _SHARED_PHRASE = re.compile(
     r"\bin the shared(?:\s+space)?\b|\b(?:to|with) the team\b",
     re.IGNORECASE,
 )
+# A destination, not a passing mention. "Det gemensamma mötet" stays personal.
+_SHARED_DESTINATION = re.compile(
+    r"\bgemensam(?:t|ma)?\s+för\s+teamet\b"
+    r"|\b(?:i|till|åt)\s+(?:det\s+)?gemensamma(?:\s+utrymmet)?\b"
+    r"|\bdet\s+gemensamma\s+utrymmet\b"
+    r"|\bgemensamma\s+utrymmet\b",
+    re.IGNORECASE,
+)
 YES_NEAR_TEAM = 80
 SAVE_NEAR_TEAM = 60
 
@@ -41,6 +49,8 @@ def _is_word_char(char: str) -> bool:
 
 def text_confirms_team_save(text: str) -> bool:
     normalized = unicodedata.normalize("NFKC", text)
+    if _SHARED_DESTINATION.search(normalized):
+        return True
     team_hits = [match.start() for match in _TEAM_WORD.finditer(normalized)]
     if not team_hits:
         return _SHARED_PHRASE.search(normalized) is not None
@@ -95,6 +105,27 @@ def choose_shared_space(text: str, spaces: list[dict]) -> str | None:
     best = ranked[0]
     same = [team for team in ranked if team["length"] == best["length"]]
     return best["id"] if len(same) == 1 else None
+
+
+def _shared_teams(spaces: list[dict]) -> list[dict]:
+    return [space for space in spaces if space.get("kind") == "shared" and str(space.get("id") or "").strip()]
+
+
+def shared_save_plan(text: str, spaces: list[dict]) -> dict:
+    """Where a brief that may ask for the shared space should land.
+
+    One shared space and a request: that space. Several teams and no single
+    named team: ask, do not guess. No shared space: personal, the contract default.
+    """
+    teams = _shared_teams(spaces)
+    if not text_requests_shared(text) or not teams:
+        return {"mode": "personal"}
+    if len(teams) == 1:
+        return {"mode": "shared", "id": teams[0]["id"]}
+    chosen = choose_shared_space(text, spaces)
+    if chosen:
+        return {"mode": "shared", "id": chosen}
+    return {"mode": "ask"}
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -280,8 +311,11 @@ async def persist_drafts(
             listed = await _maybe(list_spaces(user_id)) or []
         except Exception:
             listed = []
-    shared_id = choose_shared_space(text, listed)
-    allow_shared = shared_id is not None
+    plan = shared_save_plan(text, listed)
+    if plan["mode"] == "ask":
+        return []
+    shared_id = plan.get("id")
+    allow_shared = plan["mode"] == "shared"
     try:
         space_ids = await _maybe(spaces.readable_space_ids(user_id))
     except Exception:

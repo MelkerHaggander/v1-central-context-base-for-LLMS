@@ -101,9 +101,6 @@ const handler = createMcpHandler(
         brief: z.string().optional(),
         project: z.string().max(100).optional(),
         prompt: z.string().max(8000).optional(),
-        category: z.string().optional(),
-        title: z.string().optional(),
-        content: z.string().optional(),
       },
       WRITE_TOOL,
       async (input, extra) =>

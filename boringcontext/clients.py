@@ -53,7 +53,7 @@ def formulator_request(model: str, payload: dict) -> dict:
         "system": " ".join(
             [
                 "Extract only durable memories from the user text.",
-                "Use personal by default. Asking to save to the team, shared memory, or gemensamt selects shared when there is one team. With more than one team, stay personal unless the text names that team.",
+                "Use personal by default. Asking to save to the team, shared memory, gemensamt, gemensamma, or gemensam för teamet selects shared when there is one team. With more than one team, do not guess a team.",
                 "Never send a raw space id.",
                 "Reuse an existing project, category and title when it is the same subject.",
                 "Do not change category or project on an existing subject.",
