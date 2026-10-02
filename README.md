@@ -26,7 +26,7 @@ python -m boringcontext
 
 The process listens on `http://127.0.0.1:8000`. `POST /api/mcp` speaks JSON-RPC. `GET /api/health` reports `mcp: 1.2.0`.
 
-This local process uses an in-memory store and does not call Supabase. Pass a bearer token that you have registered in `create_app(..., sessions={token: user_id})` when you embed the app. Do not commit `.env` files or keys.
+When `SUPABASE_URL` and an anon or publishable key are set, the process uses that project and the caller's own access token, so row security still sees the logged-in user. Without those variables it keeps an empty in-memory store. The service-role key is not read. Formulation and embeddings stay off unless their own keys are set; search then stays on the lexical ranking. Do not commit `.env` files or keys.
 
 ```bash
 pytest

@@ -83,7 +83,18 @@ class AppState:
         header = request.headers.get("authorization", "")
         if not header.lower().startswith("bearer "):
             return None
-        return self.sessions.get(header[7:].strip())
+        token = header[7:].strip()
+        if not token:
+            return None
+        known = self.sessions.get(token)
+        if known:
+            return known
+        # The runtime middleware sets this after checking the bearer against
+        # Supabase Auth. Tests keep using the sessions map and never set it.
+        bound = getattr(request.state, "bc_user_id", None)
+        if isinstance(bound, str) and bound:
+            return bound
+        return None
 
 
 def create_app(
