@@ -45,11 +45,10 @@ export function formulatorRequest(model: string, input: FormulateInput) {
   return {
     model,
     max_tokens: 4096,
-    temperature: 0,
     thinking: { type: "disabled" as const },
     system: [
       "Extract only durable memories from the user text.",
-      "Use personal unless the text explicitly asks for shared.",
+      "Use personal by default. Asking to save to the team, shared memory, or gemensamt selects shared when there is one team. With more than one team, stay personal unless the text names that team.",
       "Never send a raw space id.",
       "Reuse an existing project, category and title when it is the same subject.",
       "Do not change category or project on an existing subject.",

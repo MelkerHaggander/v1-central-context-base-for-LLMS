@@ -135,6 +135,17 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
       .sort((a, b) => b.version_number - a.version_number);
   }
 
+  /** Same project + same title in the space — names must be unique. */
+  function titleTaken(spaceId: string, project: string, title: string, exceptId?: string): boolean {
+    return rows.some(
+      (candidate) =>
+        candidate.space_id === spaceId &&
+        candidate.project === project &&
+        candidate.title === title &&
+        candidate.id !== exceptId,
+    );
+  }
+
   function subjectRow(fields: SubjectWrite): StoredRow | undefined {
     return rows.find(
       (candidate) =>
@@ -192,12 +203,12 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
 
       const timestamp = toIso(now());
       const textChanged = row.title !== fields.title || row.content !== fields.content;
-      if (textChanged) {
-        writeVersion(row, timestamp, userId, "update", {
-          title: fields.title,
-          content: fields.content,
-        });
-      }
+      // Any field change is a version (project and category too). `unchanged`
+      // returned above, so something differs here. textChanged only steers the embedding.
+      writeVersion(row, timestamp, userId, "update", {
+        title: fields.title,
+        content: fields.content,
+      });
       row.project = fields.project;
       row.category = fields.category as MemoryRecord["category"];
       row.title = fields.title;
@@ -210,6 +221,14 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
     async updateById(memoryId, fields, changedBy) {
       const row = findRow(memoryId);
       if (!row) return { kind: "missing" };
+      // Title must stay unique inside the project (or among free-standing memories).
+      if (row.space_id && titleTaken(row.space_id, fields.project, fields.title, memoryId)) {
+        return {
+          kind: "failed",
+          code: "DUPLICATE_TITLE",
+          message: "A memory with that title already exists in this project.",
+        };
+      }
       if (
         rows.some(
           (candidate) =>
@@ -232,12 +251,11 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
 
       const timestamp = toIso(now());
       const textChanged = row.title !== fields.title || row.content !== fields.content;
-      if (textChanged) {
-        writeVersion(row, timestamp, changedBy, "update", {
-          title: fields.title,
-          content: fields.content,
-        });
-      }
+      // Same rule as update(): every field change is a version.
+      writeVersion(row, timestamp, changedBy, "update", {
+        title: fields.title,
+        content: fields.content,
+      });
       row.project = fields.project;
       row.category = fields.category as MemoryRecord["category"];
       row.title = fields.title;
@@ -267,7 +285,12 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
       const allowed = new Set(spaceIds);
       return rows
         .filter((row) => row.space_id !== null && allowed.has(row.space_id))
-        .map((row) => ({ ...asClient(row), source: row.source }));
+        .map((row) => ({
+          ...asClient(row),
+          source: row.source,
+          // Same shape as the Supabase list adapter: creator id for the UI.
+          created_by: row.user_id,
+        }));
     },
 
     async listNearest(_userId, embedding, spaceIds, limit) {
@@ -337,6 +360,15 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
         return { kind: "updated", row: asClient(existing) };
       }
 
+      // Another category (or any other row) already uses this title in the project.
+      if (titleTaken(fields.spaceId, fields.project, fields.title)) {
+        return {
+          kind: "failed",
+          code: "DUPLICATE_TITLE",
+          message: "A memory with that title already exists in this project.",
+        };
+      }
+
       const timestamp = toIso(now());
       const row: StoredRow = {
         id: id(),
@@ -352,7 +384,10 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
         updated_at: timestamp,
       };
       rows.push(row);
-      return { kind: "created", row: asClient(row) };
+      return {
+        kind: "created",
+        row: { ...asClient(row), source: row.source, created_by: row.user_id },
+      };
     },
 
     async setEmbedding(memoryId, embedding) {
@@ -369,6 +404,13 @@ export function createInMemoryStore(options: InMemoryStoreOptions = {}): InMemor
       const history = historyFor(memoryId);
       if (!findRow(memoryId) && history.length === 0) return null;
       return history.map(asVersion);
+    },
+
+    async listDeletions(spaceId) {
+      return versions
+        .filter((version) => version.event === "delete" && version.space_id === spaceId)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
+        .map(asVersion);
     },
 
     async spaceOf(memoryId) {

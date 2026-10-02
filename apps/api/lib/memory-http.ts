@@ -79,7 +79,13 @@ export async function postMemory(
   const result = await apiFor(deps).saveDashboardMemory(userId, fieldsOf(body), spaceId);
   if ("error" in result) {
     const status =
-      result.error.code === "FORBIDDEN" ? 403 : result.error.code.startsWith("INVALID_") ? 400 : 500;
+      result.error.code === "FORBIDDEN"
+        ? 403
+        : result.error.code === "DUPLICATE_TITLE"
+          ? 409
+          : result.error.code.startsWith("INVALID_")
+            ? 400
+            : 500;
     return errorBody(result.error.code, result.error.message, status);
   }
   return { status: 201, body: result.data };
@@ -102,11 +108,13 @@ export async function patchMemory(
         ? 404
         : result.error.code === "FORBIDDEN"
           ? 403
-          : result.error.code.startsWith("INVALID_") ||
-              result.error.code === "PROJECT_CHANGE_REQUIRES_FLAG" ||
-              result.error.code === "LESSON_CATEGORY_REQUIRES_TOOL"
-            ? 400
-            : 500;
+          : result.error.code === "DUPLICATE_TITLE"
+            ? 409
+            : result.error.code.startsWith("INVALID_") ||
+                result.error.code === "PROJECT_CHANGE_REQUIRES_FLAG" ||
+                result.error.code === "LESSON_CATEGORY_REQUIRES_TOOL"
+              ? 400
+              : 500;
     return errorBody(result.error.code, result.error.message, status);
   }
   return { status: 200, body: result.data };
@@ -147,6 +155,22 @@ export async function getMemoryVersions(
           : result.error.code.startsWith("INVALID_")
             ? 400
             : 500;
+    return errorBody(result.error.code, result.error.message, status);
+  }
+  return { status: 200, body: result.data };
+}
+
+export async function getDeletedMemories(
+  userId: string,
+  spaceId: string,
+  deps: MemoryHttpDeps,
+): Promise<HttpResult> {
+  if (!spaceId.trim()) {
+    return errorBody("INVALID_SPACE", "space_id krävs.", 400);
+  }
+  const result = await apiFor(deps).listDeletions(userId, spaceId);
+  if ("error" in result) {
+    const status = result.error.code === "FORBIDDEN" ? 403 : 400;
     return errorBody(result.error.code, result.error.message, status);
   }
   return { status: 200, body: result.data };

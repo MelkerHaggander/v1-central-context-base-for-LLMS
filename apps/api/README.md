@@ -4,7 +4,7 @@
 **Branch:** `alfredo/integrations`  
 **Stack:** Next.js **serverfunktioner** + **MCP SDK/adapter** på **Vercel**; **Supabase** PostgreSQL + Auth/OAuth  
 **Region:** Supabase **Stockholm (`eu-north-1`)**, Vercel-backend **Stockholm (`arn1`)**  
-**Supabase:** projekt `uthkzkvpkkpzrmzjunqq` är skapat. Konton, signup-lås och Vercel-env: [docs/supabase-setup.md](../../docs/supabase-setup.md).  
+**Supabase:** projekt `your-project-ref` är skapat. Konton, signup-lås och Vercel-env: [docs/supabase-setup.md](../../docs/supabase-setup.md).  
 **Arbetar självständigt med:** förutbestämda minnessvar (exakt JSON från [docs/testexempel.md](../../docs/testexempel.md)) medan du bygger riktig Auth, databasåtkomst och MCP.
 
 API:t anropar Melkers `@v1/memory`. Vercel Root Directory är `apps/api`, så paketet ligger i `vendor/memory` (`file:./vendor/memory`). Källan är fortfarande `packages/memory`. Ingen kopia i `lib/memory/`. MCP-ytan är oförändrad.

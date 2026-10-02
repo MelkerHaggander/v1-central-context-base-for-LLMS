@@ -22,7 +22,7 @@ Varje test nedan är skrivet för att fånga en **faktisk** felväg från jämf�
 - `origin/filip/dashboard` hade 12/9 **bara docs** (ingen Next-app). Tester mot dashboard skall då underkännas som Filips yta, inte som trasig hjärna.
 - Alfredos testsida `/` är **inte** Filips dashboard. Den visar rå `category` (`deadline`), inte svensk etikett.
 - Vercel Root Directory skall förbli `apps/api`. Alfredo skall sätta `"@v1/memory": "file:../../packages/memory"` och `transpilePackages: ["@v1/memory"]`. Ingen rot-`package.json`.
-- Lösen till testkontona läcker i klartext på Alfredos gren-README. Anon-nyckel läcker som hårdkodad fallback i `apps/api/lib/supabase/env.ts`. Återge dem inte här. Byt konton om läckan räknas som allvarlig.
+- Lösen till testkontona läcker i klartext på Alfredos gren-README. Återge dem inte här. Byt konton om läckan räknas som allvarlig. Den publika nyckeln ska inte ligga i koden.
 
 ## Förutsättningar innan ni börjar
 

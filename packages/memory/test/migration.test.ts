@@ -36,6 +36,7 @@ test("v1.2 brain migration adds vectors, spaces and member RLS without deleting 
   assert.match(brainMigration, /create table if not exists public\.spaces/i);
   assert.match(brainMigration, /create table if not exists public\.space_members/i);
   assert.match(brainMigration, /embedding vector\(3072\)/i);
+  assert.match(brainMigration, /halfvec\(3072\)\) halfvec_cosine_ops/i);
   assert.match(brainMigration, /embedding::halfvec\(3072\)/i);
   assert.match(brainMigration, /halfvec_cosine_ops/i);
   assert.doesNotMatch(brainMigration, /hnsw \(embedding vector_cosine_ops\)/i);

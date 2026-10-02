@@ -62,7 +62,7 @@ export function OAuthApproveView(p: OAuthApproveProps) {
   const action = p.action ?? "/oauth/approve";
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-md flex-1 flex-col justify-center gap-5 px-4 py-12">
+    <main className="rise mx-auto flex min-h-full w-full max-w-md flex-1 flex-col justify-center gap-5 px-4 py-12">
       {p.banner ? (
         <p className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs text-ink-2">
           {p.banner}
@@ -144,13 +144,13 @@ export function OAuthApproveView(p: OAuthApproveProps) {
             </p>
             <div className="flex gap-2">
               <button
-                className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:opacity-88"
+                className="press flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:opacity-88"
                 type="submit"
               >
                 Sign in and approve
               </button>
               <a
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-danger-soft"
+                className="press rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-danger-soft"
                 href={denyUrl(p.redirectUri, p.state)}
               >
                 Deny

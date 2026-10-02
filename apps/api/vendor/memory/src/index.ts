@@ -19,6 +19,7 @@ export {
   type FormulateInput,
   type MemoryFormulator,
   type SpaceAccess,
+  type SpaceRef,
   type BrainDeps,
   type SaveBriefInput,
   type SaveBriefResult,
@@ -30,6 +31,9 @@ export { fail, validateMemoryInput, validateSearchInput, validateMemoryId } from
 export { toIso } from "./time";
 export {
   PAGE_SIZE,
+  DELETION_RETENTION_DAYS,
+  keepRecentDeletions,
+  deletionRetentionCutoff,
   CONTEXT_ITEM_LIMIT,
   CONTEXT_SNIPPET_LIMIT,
   CONTEXT_JSON_LIMIT,
@@ -57,6 +61,8 @@ export {
   projectKey,
   embeddingText,
   textRequestsShared,
+  textConfirmsTeamSave,
+  chooseSharedSpace,
 } from "./brain";
 export { createInMemoryStore, contentFingerprint, type InMemoryStoreOptions } from "./in-memory";
 export { createSupabaseStore, vectorLiteral } from "./supabase";

@@ -44,6 +44,25 @@ export function clampPitch(pitch: number): number {
   return Math.min(PITCH_LIMIT, Math.max(-PITCH_LIMIT, pitch));
 }
 
+/**
+ * The inverse of rotate(): from the camera's view back to the sphere. A point
+ * straight in front of the camera is { x: 0, y: 0, z: 1 } in view space.
+ */
+export function unrotate(v: Vec3, yaw: number, pitch: number): Vec3 {
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const y = v.y * cp + v.z * sp;
+  const z1 = -v.y * sp + v.z * cp;
+
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  return {
+    x: v.x * cy - z1 * sy,
+    y,
+    z: v.x * sy + z1 * cy,
+  };
+}
+
 /** Yaw about the vertical axis, then pitch about the horizontal one. */
 export function rotate(v: Vec3, yaw: number, pitch: number): Vec3 {
   const cy = Math.cos(yaw);

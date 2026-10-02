@@ -9,8 +9,8 @@ export const NEIGHBOR_SIMILARITY = 0.55;
 export const IDENTITY_LIMIT = 50;
 export const NEAREST_LIMIT = 32;
 
-const SHARED_REQUEST =
-  /\bshared\b|\bgemensamt\b|\bgemensamma\b|\bshare (?:this|it|that|these) with\b/iu;
+const YES_NEAR_TEAM = 80;
+const SAVE_NEAR_TEAM = 60;
 
 export function projectKey(project: string): string {
   return project.normalize("NFKC").toLocaleLowerCase("sv-SE").replace(/[\s-]+/gu, "");
@@ -20,8 +20,68 @@ export function embeddingText(title: string, content: string): string {
   return `${title}\n${content}`;
 }
 
+export function textConfirmsTeamSave(text: string): boolean {
+  const normalized = text.normalize("NFKC");
+  const teamWord =
+    /\b(?:teamet|teamen|team|gemensamt|gemensamma|shared)\b|\bshare (?:this|it|that|these) with\b/giu;
+  const teamHits = [...normalized.matchAll(teamWord)].map((match) => match.index ?? 0);
+  if (teamHits.length === 0) {
+    return /\bin the shared(?:\s+space)?\b|\b(?:to|with) the team\b/iu.test(normalized);
+  }
+
+  const saveWord = /\b(?:spara|save|store)\b/giu;
+  const saveHits = [...normalized.matchAll(saveWord)].map((match) => match.index ?? 0);
+  if (
+    saveHits.some((save) => teamHits.some((team) => Math.abs(save - team) <= SAVE_NEAR_TEAM))
+  ) {
+    return true;
+  }
+
+  if (/\bin the shared(?:\s+space)?\b|\b(?:to|with) the team\b/iu.test(normalized)) {
+    return true;
+  }
+
+  const yesWord = /\b(?:ja|japp|yes)\b/giu;
+  const yesHits = [...normalized.matchAll(yesWord)].map((match) => match.index ?? 0);
+  return yesHits.some((yes) => teamHits.some((team) => Math.abs(yes - team) <= YES_NEAR_TEAM));
+}
+
 export function textRequestsShared(text: string): boolean {
-  return SHARED_REQUEST.test(text);
+  return textConfirmsTeamSave(text);
+}
+
+function mentionedNameLength(text: string, name: string | undefined): number {
+  const needle = name?.trim().toLocaleLowerCase("sv-SE") ?? "";
+  if (needle.length < 2) return 0;
+  const hay = text.normalize("NFKC").toLocaleLowerCase("sv-SE");
+  let from = 0;
+  while (from <= hay.length) {
+    const index = hay.indexOf(needle, from);
+    if (index < 0) return 0;
+    const before = hay[index - 1] ?? " ";
+    const after = hay[index + needle.length] ?? " ";
+    if (!/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return needle.length;
+    from = index + needle.length;
+  }
+  return 0;
+}
+
+export function chooseSharedSpace(
+  text: string,
+  spaces: ReadonlyArray<{ id: string; kind: string; name?: string }>,
+): string | null {
+  if (!textConfirmsTeamSave(text)) return null;
+  const teams = spaces.filter((space) => space.kind === "shared" && space.id.trim());
+  if (teams.length === 1) return teams[0]?.id ?? null;
+  if (teams.length < 2) return null;
+  const ranked = teams
+    .map((team) => ({ id: team.id, length: mentionedNameLength(text, team.name) }))
+    .filter((team) => team.length > 0)
+    .sort((left, right) => right.length - left.length);
+  const best = ranked[0];
+  if (!best) return null;
+  const sameLength = ranked.filter((team) => team.length === best.length);
+  return sameLength.length === 1 ? best.id : null;
 }
 
 export function cosineSimilarity(left: number[], right: number[]): number {
@@ -138,8 +198,9 @@ export async function recentIdentities(
 }
 
 function draftSpace(draft: MemoryDraft, allowShared: boolean): SpaceKind | null {
+  if (allowShared) return "shared";
   if (draft.space === undefined || draft.space === "personal") return "personal";
-  if (draft.space === "shared") return allowShared ? "shared" : "personal";
+  if (draft.space === "shared") return "personal";
   return null;
 }
 
@@ -180,7 +241,14 @@ export async function persistDrafts(input: {
   limit: number;
 }): Promise<WrittenMemory[]> {
   if (!input.brain.spaces || !input.store.upsertSubject) return [];
-  const allowShared = textRequestsShared(input.text);
+  let listed: Array<{ id: string; kind: string; name?: string }> = [];
+  try {
+    listed = (await input.brain.spaces.listSpaces?.(input.userId)) ?? [];
+  } catch {
+    listed = [];
+  }
+  const sharedId = chooseSharedSpace(input.text, listed);
+  const allowShared = sharedId !== null;
   let spaceIds: string[] = [];
   try {
     spaceIds = await input.brain.spaces.readableSpaceIds(input.userId);
@@ -207,7 +275,8 @@ export async function persistDrafts(input: {
 
     let spaceId: string | null = null;
     try {
-      spaceId = await input.brain.spaces.spaceFor(input.userId, space);
+      spaceId =
+        space === "shared" ? sharedId : await input.brain.spaces.spaceFor(input.userId, space);
     } catch {
       spaceId = null;
     }

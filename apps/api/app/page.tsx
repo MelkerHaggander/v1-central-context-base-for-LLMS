@@ -49,7 +49,7 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
 
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-7 px-5 pb-16">
+      <main className="rise mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-7 px-5 pb-16">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Boringcontext</h1>
           <p className="mt-1.5 text-sm text-ink-2">
@@ -82,7 +82,7 @@ export default function LoginPage() {
             />
           </label>
           {error ? <ErrorText code={error.code} message={error.message} /> : null}
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy} busy={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
         </form>

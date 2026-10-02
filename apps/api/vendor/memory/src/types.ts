@@ -24,6 +24,12 @@ export type MemoryRecord = {
    * the row was created that way, otherwise null. Absent on older list shapes.
    */
   source?: MemorySource | null;
+  /**
+   * Auth user id of whoever first wrote the row. Only set on space-list rows
+   * so the dashboard can show "Created by" (email via members). Never sent as
+   * `user_id` in the JSON — that name stays internal to the database.
+   */
+  created_by?: string;
 };
 
 export type MemoryInput = {
@@ -132,10 +138,17 @@ export type MemoryFormulator = {
   formulate(input: FormulateInput): Promise<MemoryDraft[]>;
 };
 
+export type SpaceRef = {
+  id: string;
+  kind: SpaceKind;
+  name?: string;
+};
+
 export type SpaceAccess = {
   readableSpaceIds(userId: string): Promise<string[]>;
   spaceFor(userId: string, kind: SpaceKind): Promise<string | null>;
   isMember(userId: string, spaceId: string): Promise<boolean>;
+  listSpaces?(userId: string): Promise<SpaceRef[]>;
 };
 
 export type BrainDeps = {

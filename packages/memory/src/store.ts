@@ -28,6 +28,28 @@ import type {
 import { fail, validateMemoryId, validateMemoryInput, validateSearchInput } from "./validate";
 
 export const PAGE_SIZE = 50;
+
+/** How long a deleted memory stays in "Deleted" before it is gone for good. */
+export const DELETION_RETENTION_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Drop delete-history rows older than DELETION_RETENTION_DAYS. */
+export function keepRecentDeletions(
+  rows: MemoryVersion[],
+  nowMs: number = Date.now(),
+): MemoryVersion[] {
+  const cutoff = nowMs - DELETION_RETENTION_DAYS * DAY_MS;
+  return rows.filter((row) => {
+    const at = Date.parse(row.created_at);
+    return Number.isFinite(at) && at >= cutoff;
+  });
+}
+
+/** ISO cutoff for SQL filters / purge (exclusive: older than this is expired). */
+export function deletionRetentionCutoff(nowMs: number = Date.now()): string {
+  return new Date(nowMs - DELETION_RETENTION_DAYS * DAY_MS).toISOString();
+}
 export const CONTEXT_ITEM_LIMIT = 8;
 export const CONTEXT_SNIPPET_LIMIT = 280;
 export const CONTEXT_JSON_LIMIT = 3500;
@@ -619,7 +641,11 @@ export type NearestHit = {
 
 export type SubjectUpsert =
   | { kind: "created" | "updated" | "unchanged"; row: MemoryRecord }
-  | { kind: "failed"; code: "SAVE_FAILED"; message: string };
+  | {
+      kind: "failed";
+      code: "SAVE_FAILED" | "DUPLICATE_TITLE";
+      message: string;
+    };
 
 export type MemoryStore = {
   insert(
@@ -638,7 +664,7 @@ export type MemoryStore = {
   ): Promise<
     | { kind: "updated"; row: MemoryRecord }
     | { kind: "missing" }
-    | { kind: "failed"; code: "UPDATE_FAILED"; message: string }
+    | { kind: "failed"; code: "UPDATE_FAILED" | "DUPLICATE_TITLE"; message: string }
   >;
   remove(
     userId: string,
@@ -672,6 +698,7 @@ export type MemoryStore = {
   setEmbedding?(id: string, embedding: number[] | null): Promise<void>;
   hasEmbedding?(id: string): Promise<boolean>;
   listVersions?(memoryId: string): Promise<MemoryVersion[] | null>;
+  listDeletions?(spaceId: string): Promise<MemoryVersion[]>;
   spaceOf?(memoryId: string): Promise<string | null>;
   removeById?(
     id: string,
@@ -688,7 +715,7 @@ export type MemoryStore = {
   ): Promise<
     | { kind: "updated"; row: MemoryRecord }
     | { kind: "missing" }
-    | { kind: "failed"; code: "UPDATE_FAILED"; message: string }
+    | { kind: "failed"; code: "UPDATE_FAILED" | "DUPLICATE_TITLE"; message: string }
   >;
 };
 
@@ -1073,6 +1100,10 @@ export async function saveDashboardMemory(
     source: "dashboard",
   });
   if (saved.kind === "failed") {
+    // Same title in the same project is not allowed (no silent overwrite).
+    if (saved.code === "DUPLICATE_TITLE") {
+      return fail("DUPLICATE_TITLE", saved.message);
+    }
     return fail("SAVE_FAILED", "Kunde inte spara minnet.");
   }
   await attachEmbedding(store, brain.embedding, saved.row);
@@ -1252,6 +1283,9 @@ export async function updateMemory(
   if (updated.kind === "missing") {
     return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.");
   }
+  if (updated.kind === "failed" && updated.code === "DUPLICATE_TITLE") {
+    return fail("DUPLICATE_TITLE", updated.message);
+  }
   return fail("UPDATE_FAILED", "Kunde inte uppdatera minnet.");
 }
 
@@ -1309,5 +1343,22 @@ export function createMemoryApi(store: MemoryStore, brain: BrainDeps = {}) {
       saveDashboardMemory(userId, input, spaceId, store, brain),
     listVersions: (userId: string, id: string) =>
       listMemoryVersions(userId, id, store, brain.spaces),
+    listDeletions: (userId: string, spaceId: string) =>
+      listDeletions(userId, spaceId, store, brain.spaces),
   };
+}
+
+export async function listDeletions(
+  userId: string,
+  spaceId: string,
+  store: MemoryStore,
+  spaces?: SpaceAccess,
+): Promise<Result<MemoryVersion[]>> {
+  if (!store.listDeletions) return { data: [] };
+  if (spaces) {
+    const member = await spaces.isMember(userId, spaceId);
+    if (!member) return fail("FORBIDDEN", "Du är inte medlem i det utrymmet.");
+  }
+  // Deleted history is restorable for 30 days, then gone for good.
+  return { data: keepRecentDeletions(await store.listDeletions(spaceId)) };
 }

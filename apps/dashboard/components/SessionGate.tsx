@@ -13,7 +13,7 @@ export function SessionGate({ children }: { children: (user: SessionUser) => Rea
   }
 
   if (user === undefined) {
-    return <main className="p-6 text-sm text-ink-3">Checking sign-in…</main>;
+    return <main className="fade-in p-6 text-sm text-ink-3">Checking sign-in…</main>;
   }
 
   if (!user) {
@@ -37,7 +37,7 @@ function AccountSwitched({
   const router = useRouter();
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-4 py-12">
+    <main className="rise mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-4 py-12">
       <h1 className="text-xl font-semibold">The account changed in this browser</h1>
       <p className="text-sm text-ink-2">
         Another account signed in in a different tab. Tabs share one sign-in, so this tab was

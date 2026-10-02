@@ -73,6 +73,16 @@ class Spaces:
     async def is_member(self, user_id: str, space_id: str):
         return user_id == self.user_id and space_id in self.readable
 
+    async def list_spaces(self, user_id: str):
+        if user_id != self.user_id:
+            return []
+        listed = []
+        if PERSONAL in self.readable:
+            listed.append({"id": PERSONAL, "kind": "personal"})
+        if SHARED in self.readable:
+            listed.append({"id": SHARED, "kind": "shared", "name": "Boring"})
+        return listed
+
 
 class Brain:
     def __init__(self, spaces=None, embedding=None, formulator=None):
@@ -120,7 +130,7 @@ def test_validation_order_and_trim():
     blank = validate_memory_input({"project": "Projekt A", "category": "deadline", "title": "   ", "content": "x"})
     assert blank["error"]["code"] == "INVALID_TITLE"
     empty = validate_memory_input({"project": "", "category": "nope", "title": "", "content": ""})
-    assert empty["error"]["code"] == "INVALID_PROJECT"
+    assert empty["error"]["code"] == "INVALID_TITLE"
     assert validate_memory_input({"project": "Projekt A", "category": "nope", "title": "", "content": ""})["error"]["code"] == "INVALID_TITLE"
     assert validate_memory_input({"project": "Projekt A", "category": "nope", "title": "Lanseringsdatum", "content": ""})["error"]["code"] == "INVALID_CONTENT"
     assert validate_memory_id("not-an-id")["error"]["code"] == "INVALID_ID"

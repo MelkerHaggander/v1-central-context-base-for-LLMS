@@ -56,7 +56,13 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const result = mockDb.deleteMemory(account.id, id);
   if ("error" in result) {
     const status =
-      result.error.code === "NOT_FOUND" ? 404 : result.error.code.startsWith("INVALID_") ? 400 : 500;
+      result.error.code === "NOT_FOUND"
+        ? 404
+        : result.error.code === "FORBIDDEN"
+          ? 403
+          : result.error.code.startsWith("INVALID_")
+            ? 400
+            : 500;
     return jsonError(result.error.code, result.error.message, status);
   }
   // Kontraktet i docs/filip-auth.md: naket { success: true }, inte { data }.

@@ -19,103 +19,118 @@
 :root {
   color-scheme: light;
 
-  --bg: #f7f7f5;
+  /*
+   * Light: Off-White + Charcoal (Filip, 29 Sep). Neutral off-white page, white
+   * panels, charcoal accent. No hue in the chrome, so nothing in the interface
+   * competes with the category colours.
+   * Text on the page: ink 17.0:1, ink-2 9.3:1, ink-3 4.7:1. On panels 17.8 /
+   * 9.7 / 5.0. Every category colour at 4.0:1 or more on both.
+   */
+  --bg: #fafaf8;
   --surface: #ffffff;
-  --surface-2: #f2f1ee;
-  --surface-3: #eae9e4;
-  --line: #e3e2dd;
-  --line-2: #cfcec7;
+  --surface-2: #f5f5f3;
+  --surface-3: #eaeae8;
+  --line: #e8e8e5;
+  --line-2: #bebebc;
 
-  --ink: #14161a;
-  --ink-2: #55575a;
-  --ink-3: #8a8c8e;
+  --ink: #181818;
+  --ink-2: #444444;
+  --ink-3: #707070;
 
-  /* Neutral accent: the ink itself. Guarantees no clash with a category hue. */
-  --accent: #14161a;
+  /* Charcoal accent for the active switch and the primary button. Not a category hue. */
+  --accent: #252525;
   --accent-ink: #ffffff;
 
-  --danger: #b3261e;
+  --danger: #a3261d;
   --danger-ink: #ffffff;
-  --danger-soft: #fdecea;
+  --danger-soft: #f6dcd4;
 
-  --globe-halo: rgba(20, 22, 26, 0.06);
-  --globe-wire: #e9e8e2;
-  --globe-limb: rgba(20, 22, 26, 0.09);
+  --globe-halo: rgba(112, 112, 112, 0.1);
+  --globe-wire: rgba(24, 24, 24, 0.16);
+  --globe-limb: rgba(24, 24, 24, 0.32);
 
-  --cat-fact: #eb6834;
-  --cat-decision: #2a78d6;
-  --cat-goal: #eda100;
-  --cat-deadline: #e87ba4;
+  /* Validated on #fafaf8 and #ffffff: all >= 4:1, CVD worst adjacent 11.4. */
+  --cat-fact: #d4501a;
+  --cat-decision: #2672cc;
+  --cat-goal: #a97000;
+  --cat-deadline: #c54379;
   --cat-preference: #4a3aa7;
-  --cat-lesson: #008300;
+  --cat-lesson: #007a00;
 }
 
+/*
+ * Dark: Black + Warm White (Filip, 29 Sep). Near-black page, warm white text
+ * and a warm white accent: a near-black accent would vanish on this page.
+ * Text 18.0 / 12.4 / 7.3 on the page, 16.7 / 11.5 / 6.8 on the panels. Every
+ * category colour at 4.5:1 or more on both. Globe wire 1.4:1 and limb 2.5:1,
+ * quiet enough that a line is never read as a category.
+ */
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
 
-    --bg: #0a0b0c;
-    --surface: #131517;
-    --surface-2: #1b1e21;
-    --surface-3: #22262a;
-    --line: #24282c;
-    --line-2: #333a40;
+    --bg: #0e0e0d;
+    --surface: #171716;
+    --surface-2: #20201f;
+    --surface-3: #282826;
+    --line: #282826;
+    --line-2: #4c4c49;
 
-    --ink: #f1f2f3;
-    --ink-2: #b4b7ba;
-    --ink-3: #82868a;
+    --ink: #f8f7f4;
+    --ink-2: #d0cfcc;
+    --ink-3: #a09f9b;
 
-    --accent: #f1f2f3;
-    --accent-ink: #0a0b0c;
+    --accent: #f8f7f4;
+    --accent-ink: #0e0e0d;
 
     --danger: #ff8d82;
     --danger-ink: #1a0f0d;
-    --danger-soft: #2b1614;
+    --danger-soft: #3a1f1c;
 
-    --globe-halo: rgba(255, 255, 255, 0.05);
-    --globe-wire: #1a2025;
-    --globe-limb: rgba(255, 255, 255, 0.1);
+    --globe-halo: rgba(248, 247, 244, 0.06);
+    --globe-wire: rgba(248, 247, 244, 0.13);
+    --globe-limb: rgba(248, 247, 244, 0.3);
 
     --cat-fact: #d95926;
     --cat-decision: #3987e5;
     --cat-goal: #c98500;
     --cat-deadline: #d55181;
     --cat-preference: #9085e9;
-    --cat-lesson: #008300;
+    --cat-lesson: #2e9a3a;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0a0b0c;
-  --surface: #131517;
-  --surface-2: #1b1e21;
-  --surface-3: #22262a;
-  --line: #24282c;
-  --line-2: #333a40;
+  --bg: #0e0e0d;
+  --surface: #171716;
+  --surface-2: #20201f;
+  --surface-3: #282826;
+  --line: #282826;
+  --line-2: #4c4c49;
 
-  --ink: #f1f2f3;
-  --ink-2: #b4b7ba;
-  --ink-3: #82868a;
+  --ink: #f8f7f4;
+  --ink-2: #d0cfcc;
+  --ink-3: #a09f9b;
 
-  --accent: #f1f2f3;
-  --accent-ink: #0a0b0c;
+  --accent: #f8f7f4;
+  --accent-ink: #0e0e0d;
 
   --danger: #ff8d82;
   --danger-ink: #1a0f0d;
-  --danger-soft: #2b1614;
+  --danger-soft: #3a1f1c;
 
-  --globe-halo: rgba(255, 255, 255, 0.05);
-  --globe-wire: #1a2025;
-  --globe-limb: rgba(255, 255, 255, 0.1);
+  --globe-halo: rgba(248, 247, 244, 0.06);
+  --globe-wire: rgba(248, 247, 244, 0.13);
+  --globe-limb: rgba(248, 247, 244, 0.3);
 
   --cat-fact: #d95926;
   --cat-decision: #3987e5;
   --cat-goal: #c98500;
   --cat-deadline: #d55181;
   --cat-preference: #9085e9;
-  --cat-lesson: #008300;
+  --cat-lesson: #2e9a3a;
 }
 
 @theme inline {
@@ -198,43 +213,410 @@ body {
   border: 1px solid var(--line);
 }
 
+/* ------------------------------ motion ------------------------------ */
+/*
+ * lib/motion.ts has the rules. In short: opacity and transform, short, one
+ * curve in and one out, and everything that appears also leaves.
+ *
+ * --motion is 1, or 0 when motion is reduced (the reader's choice in the
+ * account menu, else the computer's). Every translate and scale below is
+ * multiplied by it, so reduced motion keeps the fades and drops the movement.
+ */
+:root {
+  --motion: 1;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:where(:not([data-motion="full"])) {
+    --motion: 0;
+  }
+}
+:root[data-motion="reduced"] {
+  --motion: 0;
+}
+
 @keyframes bc-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(calc(6px * var(--motion)));
   }
+}
+@keyframes bc-fall {
   to {
-    opacity: 1;
-    transform: none;
+    opacity: 0;
+    transform: translateY(calc(6px * var(--motion)));
   }
 }
-
-.rise {
-  animation: bc-rise 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+@keyframes bc-fade-in {
+  from {
+    opacity: 0;
+  }
 }
-
+@keyframes bc-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes bc-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(calc(1 - 0.05 * var(--motion)));
+  }
+}
+@keyframes bc-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-4px * var(--motion))) scale(calc(1 - 0.03 * var(--motion)));
+  }
+}
+@keyframes bc-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(-4px * var(--motion))) scale(calc(1 - 0.03 * var(--motion)));
+  }
+}
 @keyframes bc-slide-in {
   from {
     opacity: 0;
-    transform: translateX(16px);
+    transform: translateX(calc(16px * var(--motion)));
+  }
+}
+@keyframes bc-slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(calc(20px * var(--motion)));
+  }
+}
+@keyframes bc-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(calc(24px * var(--motion)));
+  }
+}
+@keyframes bc-sheet-down {
+  to {
+    opacity: 0;
+    transform: translateY(calc(40px * var(--motion)));
+  }
+}
+@keyframes bc-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(8px * var(--motion))) scale(calc(1 - 0.02 * var(--motion)));
+  }
+}
+@keyframes bc-dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(6px * var(--motion))) scale(calc(1 - 0.02 * var(--motion)));
+  }
+}
+/* Height through grid rows: 0fr to 1fr is animatable, "auto" is not. */
+@keyframes bc-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
   }
   to {
+    grid-template-rows: 1fr;
     opacity: 1;
-    transform: none;
+  }
+}
+@keyframes bc-close {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+/* Clips while the height moves, then lets focus rings out again. */
+@keyframes bc-clip {
+  from,
+  99% {
+    overflow: hidden;
+  }
+  to {
+    overflow: visible;
+  }
+}
+@keyframes bc-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(4px * var(--motion)));
+  }
+}
+@keyframes bc-flash {
+  from {
+    background-color: var(--surface-3);
+  }
+}
+@keyframes bc-swap {
+  from {
+    opacity: 0;
+    transform: rotate(calc(-45deg * var(--motion))) scale(calc(1 - 0.35 * var(--motion)));
+  }
+}
+@keyframes bc-tick {
+  40% {
+    transform: scale(calc(1 - 0.18 * var(--motion)));
+  }
+}
+@keyframes bc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes bc-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes bc-bar {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
   }
 }
 
+/* Appear and leave. The leave classes also stop clicks on what is going. */
+.rise {
+  animation: bc-rise 220ms var(--ease-out) both;
+}
+.fall {
+  animation: bc-fall 170ms var(--ease-in) both;
+  pointer-events: none;
+}
+.fade-in {
+  animation: bc-fade-in 200ms var(--ease-out) both;
+}
+.fade-in-slow {
+  animation: bc-fade-in 520ms var(--ease-out) both;
+}
+.fade-out {
+  animation: bc-fade-out 170ms var(--ease-in) both;
+  pointer-events: none;
+}
+.pop-in {
+  animation: bc-pop-in 160ms var(--ease-out) both;
+}
+.menu-in {
+  animation: bc-menu-in 150ms var(--ease-out) both;
+}
+.menu-out {
+  animation: bc-menu-out 130ms var(--ease-in) both;
+  pointer-events: none;
+}
+.dialog-in {
+  animation: bc-dialog-in 220ms var(--ease-out) both;
+}
+.dialog-out {
+  animation: bc-dialog-out 170ms var(--ease-in) both;
+  pointer-events: none;
+}
+
+/* Side panel from sm up, bottom sheet on phones. */
 .slide-in {
-  animation: bc-slide-in 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: bc-slide-in 240ms var(--ease-out) both;
+}
+.slide-out {
+  animation: bc-slide-out 180ms var(--ease-in) both;
+  pointer-events: none;
+}
+@media (max-width: 639px) {
+  .slide-in {
+    animation-name: bc-sheet-up;
+  }
+  .slide-out {
+    animation-name: bc-sheet-down;
+  }
+  .dialog-in {
+    animation-name: bc-sheet-up;
+  }
+  .dialog-out {
+    animation-name: bc-sheet-down;
+  }
 }
 
-/* The globe stops spinning and panels stop sliding when the reader asks for that. */
-@media (prefers-reduced-motion: reduce) {
-  .rise,
-  .slide-in {
-    animation: none;
+/* A section that opens and closes in height: one child, which holds the content. */
+.bc-expand {
+  display: grid;
+  animation: bc-open 220ms var(--ease-out) both;
+}
+.bc-expand > * {
+  min-height: 0;
+  animation: bc-clip 220ms both;
+}
+.bc-collapse {
+  display: grid;
+  animation: bc-close 190ms var(--ease-in) both;
+  pointer-events: none;
+}
+.bc-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * List rows (components/ui.tsx Row). They rise in, a few at a time when a list
+ * opens (--i is the index), and close in height when they leave: a delete, a
+ * Keep, a filter.
+ */
+.bc-row {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.bc-row > * {
+  min-height: 0;
+}
+.bc-row-in {
+  animation: bc-row-in 220ms var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 18ms);
+}
+.bc-row-out {
+  animation: bc-close 200ms var(--ease-in) both;
+  pointer-events: none;
+}
+.bc-row-out > * {
+  overflow: hidden;
+}
+
+/* What was just saved lights up once where it landed. */
+.flash {
+  animation: bc-flash 1400ms var(--ease-out);
+}
+
+/* Pressing. Compact controls sink a little; wide rows darken instead (active:bg-surface-3). */
+.press {
+  transition-property: transform, color, background-color, border-color, opacity, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+.press:active:not(:disabled) {
+  transform: scale(calc(1 - 0.035 * var(--motion)));
+  transition-duration: 60ms;
+}
+
+/* An icon that changes (sun and moon, pause and play) turns in. */
+.swap {
+  animation: bc-swap 260ms var(--ease-out) both;
+}
+
+/* Checkboxes give a small tick when they change. */
+.tick:checked {
+  animation: bc-tick 200ms var(--ease-out);
+}
+
+/* A line drawn through text that is done, left to right. */
+.strike {
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 0 1px;
+  transition: background-size 300ms var(--ease-out);
+}
+.strike[data-on="true"] {
+  background-size: 100% 1px;
+}
+
+/* The line under the current page grows out from its middle. */
+@keyframes bc-grow-x {
+  from {
+    transform: scaleX(calc(1 - var(--motion)));
+    opacity: 0;
   }
-  * {
-    transition-duration: 0.01ms !important;
-  }
+}
+.grow-x {
+  animation: bc-grow-x 260ms var(--ease-out) both;
+}
+
+/* The active category's underline grows instead of popping. */
+.u-line {
+  position: relative;
+}
+.u-line::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -3px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform calc(220ms * var(--motion)) var(--ease-out);
+}
+.u-line[data-on="true"]::after {
+  transform: scaleX(1);
+}
+
+/* The thumb of a segmented control slides to the picked option (ui.tsx useSegmentThumb). */
+.seg-thumb {
+  position: absolute;
+  top: 0.125rem;
+  bottom: 0.125rem;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.seg-thumb[data-ready="true"] {
+  transition:
+    transform calc(240ms * var(--motion)) var(--ease-out),
+    width calc(240ms * var(--motion)) var(--ease-out),
+    opacity 150ms ease;
+}
+
+/* Busy: a small ring inside the button that is working. */
+.spinner {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  animation: bc-spin 700ms linear infinite;
+  opacity: 0.85;
+}
+
+/* The Undo toast's time left. Hovering or focusing the toast holds it, as the queue does. */
+.drain {
+  transform-origin: left;
+  animation: bc-drain var(--drain, 8000ms) linear both;
+}
+.toast:hover .drain,
+.toast:focus-within .drain {
+  animation-play-state: paused;
+}
+
+/* A thin moving line while the list refreshes. */
+.loading-bar {
+  animation: bc-bar 1100ms var(--ease-in-out, ease-in-out) infinite;
+}
+
+/* Theme switch: the new theme grows as a circle from the click (ThemeToggle applyTheme). */
+:root.theme-reveal::view-transition-old(root),
+:root.theme-reveal::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Theme switch without view transitions: colours cross-fade for a moment instead of snapping. */
+.theme-fade,
+.theme-fade * {
+  transition:
+    background-color 260ms ease,
+    border-color 260ms ease,
+    color 260ms ease,
+    fill 260ms ease !important;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

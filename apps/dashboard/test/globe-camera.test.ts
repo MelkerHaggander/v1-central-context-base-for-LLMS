@@ -97,3 +97,23 @@ describe("globe camera", () => {
     assert.equal(hitTest([front], camera, 0, 0, 20), null);
   });
 });
+
+describe("unrotate", () => {
+  it("undoes rotate, and the camera's front is (0, 0, 1) in view space", async () => {
+    const { rotate, unrotate } = await import("../lib/globe/camera");
+    const { frontVector } = await import("../lib/globe/gather");
+    for (const [yaw, pitch] of [
+      [0, 0],
+      [0.6, 0.28],
+      [-2.4, -0.9],
+      [5.1, 1.1],
+    ]) {
+      const v = { x: 0.3, y: -0.5, z: 0.81 };
+      const back = unrotate(rotate(v, yaw, pitch), yaw, pitch);
+      assert.ok(Math.hypot(back.x - v.x, back.y - v.y, back.z - v.z) < 1e-9);
+      const front = unrotate({ x: 0, y: 0, z: 1 }, yaw, pitch);
+      const f = frontVector(yaw, pitch);
+      assert.ok(Math.hypot(front.x - f.x, front.y - f.y, front.z - f.z) < 1e-9);
+    }
+  });
+});

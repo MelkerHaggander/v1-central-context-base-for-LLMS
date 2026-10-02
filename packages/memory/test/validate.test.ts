@@ -84,7 +84,16 @@ test("blank title is INVALID_TITLE", () => {
   assert.equal(result.error.code, "INVALID_TITLE");
 });
 
-test("error order project then title then content then category", () => {
+test("error order title then content then category; empty project is allowed", () => {
+  const noProject = validateMemoryInput({
+    project: "",
+    category: "fact",
+    title: "Möte",
+    content: "Agenda.",
+  });
+  assert.ok("data" in noProject);
+  assert.equal(noProject.data.project, "");
+
   const allEmpty = validateMemoryInput({
     project: "",
     category: "nope",
@@ -92,7 +101,7 @@ test("error order project then title then content then category", () => {
     content: "",
   });
   assert.ok("error" in allEmpty);
-  assert.equal(allEmpty.error.code, "INVALID_PROJECT");
+  assert.equal(allEmpty.error.code, "INVALID_TITLE");
 
   const badTitle = validateMemoryInput({
     project: "Projekt A",

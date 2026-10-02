@@ -31,7 +31,7 @@ export type AllMemoriesState = {
  * UNAUTHENTICATED is not handled here. SessionGate owns that: it polls the
  * session and moves the reader to the login page.
  */
-export function useAllMemories(userId: string): AllMemoriesState {
+export function useAllMemories(userId: string, spaceId: string): AllMemoriesState {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [complete, setComplete] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -40,14 +40,26 @@ export function useAllMemories(userId: string): AllMemoriesState {
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
 
   const inFlight = useRef(false);
+  // Set when a local change or a refresh request arrives while a fetch is
+  // out. That fetch's answer may predate the change, so it is thrown away and
+  // one more fetch runs, instead of snapping a just-saved row back.
+  const again = useRef(false);
   const alive = useRef(true);
 
   const load = useCallback(async () => {
-    if (inFlight.current) return;
+    if (inFlight.current) {
+      again.current = true;
+      return;
+    }
     inFlight.current = true;
     setLoading(true);
 
-    const result = await fetchAllMemories({ expectedUserId: userId });
+    let result: Awaited<ReturnType<typeof fetchAllMemories>>;
+    do {
+      again.current = false;
+      // v1.2: GET /api/memories answers 400 INVALID_SPACE without space_id.
+      result = await fetchAllMemories({ expectedUserId: userId, space_id: spaceId });
+    } while (again.current && alive.current);
 
     inFlight.current = false;
     if (!alive.current) return;
@@ -62,7 +74,7 @@ export function useAllMemories(userId: string): AllMemoriesState {
     setMemories(result.memories);
     setComplete(result.complete);
     setFetchedAt(new Date());
-  }, [userId]);
+  }, [userId, spaceId]);
 
   useEffect(() => {
     alive.current = true;
@@ -88,6 +100,7 @@ export function useAllMemories(userId: string): AllMemoriesState {
 
   const apply = useCallback((change: (rows: Memory[]) => Memory[]) => {
     setMemories((rows) => change(rows));
+    if (inFlight.current) again.current = true;
   }, []);
 
   return {

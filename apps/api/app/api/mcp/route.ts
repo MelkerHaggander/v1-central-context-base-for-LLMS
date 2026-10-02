@@ -1,9 +1,7 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { z } from "zod";
-import { createBrainClients } from "@/lib/memory-clients";
-import { createSupabaseSpaceAccess } from "@/lib/space-access";
+import { callPythonBrain } from "@/lib/python-brain";
 import {
   memoryAuthRequiredResult,
   withChatGptToolList,
@@ -17,7 +15,6 @@ import {
 } from "@/lib/mcp-oauth-challenge";
 import { isPublicMcpHandshake, isPublicMcpBody } from "@/lib/mcp-public-handshake";
 import { mcpOrigin, runMcpRequest } from "@/lib/mcp-request-context";
-import { createMcpTokenStore } from "@/lib/oauth/mcp-memory-store";
 import { getMcpSession } from "@/lib/oauth/sessions";
 import { createSupabaseUserClient } from "@/lib/supabase/clients";
 
@@ -61,42 +58,10 @@ function jsonTool(result: { data?: unknown; error?: { code: string; message: str
   };
 }
 
-function userClient(extra: { authInfo?: AuthInfo }) {
-  const token = extra.authInfo?.token;
-  if (!token) throw new Error("UNAUTHENTICATED");
-  return createSupabaseUserClient(token);
-}
-
 function mcpUserId(extra: { authInfo?: AuthInfo }) {
   const id = extra.authInfo?.extra?.userId;
   if (typeof id !== "string" || !id) throw new Error("UNAUTHENTICATED");
   return id;
-}
-
-function memoryApi(extra: { authInfo?: AuthInfo }) {
-  const clients = createBrainClients();
-  let spaces;
-  try {
-    spaces = createSupabaseSpaceAccess(userClient(extra));
-  } catch {
-    spaces = {
-      async readableSpaceIds() {
-        return [];
-      },
-      async spaceFor() {
-        return null;
-      },
-      async isMember() {
-        return false;
-      },
-    };
-  }
-  const brain = { ...clients, spaces };
-  const mcpAccess = extra.authInfo?.extra?.mcpAccess;
-  if (typeof mcpAccess === "string" && mcpAccess) {
-    return createMemoryApi(createMcpTokenStore(mcpAccess), brain);
-  }
-  return createMemoryApi(createSupabaseStore(userClient(extra)), brain);
 }
 
 async function runMemoryTool(
@@ -124,7 +89,9 @@ const handler = createMcpHandler(
       },
       CONTEXT_TOOL,
       async (input, extra) =>
-        runMemoryTool(extra, (userId) => memoryApi(extra).getContext(userId, input)),
+        runMemoryTool(extra, async (userId) =>
+          callPythonBrain("get_context", userId, input, extra.authInfo?.token ?? ""),
+        ),
     );
 
     server.tool(
@@ -139,7 +106,10 @@ const handler = createMcpHandler(
         content: z.string().optional(),
       },
       WRITE_TOOL,
-      async (input, extra) => runMemoryTool(extra, (userId) => memoryApi(extra).saveBrief(userId, input)),
+      async (input, extra) =>
+        runMemoryTool(extra, async (userId) =>
+          callPythonBrain("save_brief", userId, input, extra.authInfo?.token ?? ""),
+        ),
     );
   },
   {

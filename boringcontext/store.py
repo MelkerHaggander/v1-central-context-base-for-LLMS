@@ -1,6 +1,7 @@
 import math
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from boringcontext.brain import (
@@ -16,10 +17,48 @@ from boringcontext.jsonutil import js_json
 from boringcontext.validate import fail, validate_memory_id, validate_memory_input, validate_search_input
 
 PAGE_SIZE = 50
+DELETION_RETENTION_DAYS = 30
 CONTEXT_ITEM_LIMIT = 8
 CONTEXT_SNIPPET_LIMIT = 280
 CONTEXT_JSON_LIMIT = 3500
 SAVED_ROW_LIMIT = 8
+
+
+def _as_utc(moment: datetime) -> datetime:
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def deletion_retention_cutoff(now: datetime | float | None = None) -> str:
+    if isinstance(now, (int, float)):
+        moment = datetime.fromtimestamp(now / 1000, tz=timezone.utc)
+    elif isinstance(now, datetime):
+        moment = _as_utc(now)
+    else:
+        moment = datetime.now(timezone.utc)
+    cutoff = moment - timedelta(days=DELETION_RETENTION_DAYS)
+    return cutoff.isoformat().replace("+00:00", "Z")
+
+
+def keep_recent_deletions(rows: list[dict], now: datetime | float | None = None) -> list[dict]:
+    if isinstance(now, (int, float)):
+        moment = datetime.fromtimestamp(now / 1000, tz=timezone.utc)
+    elif isinstance(now, datetime):
+        moment = _as_utc(now)
+    else:
+        moment = datetime.now(timezone.utc)
+    cutoff = moment - timedelta(days=DELETION_RETENTION_DAYS)
+    kept = []
+    for row in rows:
+        raw = str(row.get("created_at") or "")
+        try:
+            at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if _as_utc(at) >= cutoff:
+            kept.append(row)
+    return kept
 
 STOP_WORDS = {
     "ahead", "after", "about", "again", "also", "alla", "allt", "am", "and",
@@ -735,6 +774,8 @@ async def save_dashboard_memory(user_id: str, memory: dict, space_id: str, store
         )
     )
     if saved["kind"] == "failed":
+        if saved.get("code") == "DUPLICATE_TITLE":
+            return fail("DUPLICATE_TITLE", saved["message"])
         return fail("SAVE_FAILED", "Kunde inte spara minnet.")
     await attach_embedding(store, getattr(brain, "embedding", None), saved["row"])
     return {"data": saved["row"]}
@@ -858,6 +899,8 @@ async def update_memory(user_id: str, memory: dict, store: Any, brain: Any | Non
         return {"data": updated["row"]}
     if updated["kind"] == "missing":
         return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.")
+    if updated["kind"] == "failed" and updated.get("code") == "DUPLICATE_TITLE":
+        return fail("DUPLICATE_TITLE", updated["message"])
     return fail("UPDATE_FAILED", "Kunde inte uppdatera minnet.")
 
 

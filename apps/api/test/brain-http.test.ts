@@ -52,20 +52,20 @@ describe("v1.2 brain HTTP and clients", () => {
     assert.doesNotMatch(MEMORY_INSTRUCTIONS, /update_memory|lesson_memory|search_memory/);
   });
 
-  it("builds one temperature-0 formulator call and one embedding call from env", async () => {
-    const formulated = formulatorRequest("claude-sonnet", {
+  it("builds one formulator call without temperature and one embedding call from env", async () => {
+    const formulated = formulatorRequest("claude-sonnet-5", {
       source: "save_memory",
       text: "brief",
       existing: [],
     });
-    assert.equal(formulated.temperature, 0);
+    assert.equal("temperature" in formulated, false);
     assert.match(
       formulated.system,
       /A rule for how to answer next time is lesson, not preference/,
     );
     assert.deepEqual(formulated.thinking, { type: "disabled" });
     assert.equal(formulated.tools.length, 1);
-    assert.equal(formulated.model, "claude-sonnet");
+    assert.equal(formulated.model, "claude-sonnet-5");
 
     const embedded = embeddingRequest("text-embedding-3-large", "Titel\nInnehåll");
     assert.equal(embedded.model, "text-embedding-3-large");
@@ -92,13 +92,13 @@ describe("v1.2 brain HTTP and clients", () => {
 
     let formulateCalls = 0;
     const formulator = createFormulatorClient(
-      { ANTHROPIC_API_KEY: "test-key", MEMORY_FORMULATOR_MODEL: "claude-sonnet" },
+      { ANTHROPIC_API_KEY: "test-key", MEMORY_FORMULATOR_MODEL: "claude-sonnet-5" },
       async (_url, init) => {
         formulateCalls += 1;
         const body = JSON.parse(String(init?.body));
-        assert.equal(body.temperature, 0);
+        assert.equal("temperature" in body, false);
         assert.deepEqual(body.thinking, { type: "disabled" });
-        assert.equal(body.model, "claude-sonnet");
+        assert.equal(body.model, "claude-sonnet-5");
         return new Response(
           JSON.stringify({
             content: [{ type: "tool_use", name: "record_memories", input: { memories: [] } }],

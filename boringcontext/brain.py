@@ -12,10 +12,18 @@ NEIGHBOR_SIMILARITY = 0.55
 IDENTITY_LIMIT = 50
 NEAREST_LIMIT = 32
 
-_SHARED_REQUEST = re.compile(
-    r"\bshared\b|\bgemensamt\b|\bgemensamma\b|\bshare (?:this|it|that|these) with\b",
+_TEAM_WORD = re.compile(
+    r"\b(?:teamet|teamen|team|gemensamt|gemensamma|shared)\b|\bshare (?:this|it|that|these) with\b",
     re.IGNORECASE,
 )
+_SAVE_WORD = re.compile(r"\b(?:spara|save|store)\b", re.IGNORECASE)
+_YES_WORD = re.compile(r"\b(?:ja|japp|yes)\b", re.IGNORECASE)
+_SHARED_PHRASE = re.compile(
+    r"\bin the shared(?:\s+space)?\b|\b(?:to|with) the team\b",
+    re.IGNORECASE,
+)
+YES_NEAR_TEAM = 80
+SAVE_NEAR_TEAM = 60
 
 
 def project_key(project: str) -> str:
@@ -27,8 +35,66 @@ def embedding_text(title: str, content: str) -> str:
     return f"{title}\n{content}"
 
 
+def _is_word_char(char: str) -> bool:
+    return char.isalnum()
+
+
+def text_confirms_team_save(text: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", text)
+    team_hits = [match.start() for match in _TEAM_WORD.finditer(normalized)]
+    if not team_hits:
+        return _SHARED_PHRASE.search(normalized) is not None
+    save_hits = [match.start() for match in _SAVE_WORD.finditer(normalized)]
+    if any(abs(save - team) <= SAVE_NEAR_TEAM for save in save_hits for team in team_hits):
+        return True
+    if _SHARED_PHRASE.search(normalized):
+        return True
+    yes_hits = [match.start() for match in _YES_WORD.finditer(normalized)]
+    return any(abs(yes - team) <= YES_NEAR_TEAM for yes in yes_hits for team in team_hits)
+
+
 def text_requests_shared(text: str) -> bool:
-    return _SHARED_REQUEST.search(text) is not None
+    return text_confirms_team_save(text)
+
+
+def _mentioned_name_length(text: str, name: str | None) -> int:
+    needle = (name or "").strip().casefold()
+    if len(needle) < 2:
+        return 0
+    hay = unicodedata.normalize("NFKC", text).casefold()
+    start = 0
+    while start <= len(hay):
+        index = hay.find(needle, start)
+        if index < 0:
+            return 0
+        before = hay[index - 1] if index else " "
+        after_index = index + len(needle)
+        after = hay[after_index] if after_index < len(hay) else " "
+        if not _is_word_char(before) and not _is_word_char(after):
+            return len(needle)
+        start = after_index
+    return 0
+
+
+def choose_shared_space(text: str, spaces: list[dict]) -> str | None:
+    if not text_confirms_team_save(text):
+        return None
+    teams = [space for space in spaces if space.get("kind") == "shared" and str(space.get("id") or "").strip()]
+    if len(teams) == 1:
+        return teams[0].get("id")
+    if len(teams) < 2:
+        return None
+    ranked = [
+        {"id": team["id"], "length": _mentioned_name_length(text, team.get("name"))}
+        for team in teams
+    ]
+    ranked = [team for team in ranked if team["length"] > 0]
+    ranked.sort(key=lambda team: team["length"], reverse=True)
+    if not ranked:
+        return None
+    best = ranked[0]
+    same = [team for team in ranked if team["length"] == best["length"]]
+    return best["id"] if len(same) == 1 else None
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -155,11 +221,13 @@ async def recent_identities(user_id: str, space_ids: list[str], store: Any) -> l
 
 
 def _draft_space(draft: dict, allow_shared: bool) -> str | None:
+    if allow_shared:
+        return "shared"
     space = draft.get("space")
     if space is None or space == "personal":
         return "personal"
     if space == "shared":
-        return "shared" if allow_shared else "personal"
+        return "personal"
     return None
 
 
@@ -205,7 +273,15 @@ async def persist_drafts(
     upsert = getattr(store, "upsert_subject", None)
     if spaces is None or upsert is None:
         return []
-    allow_shared = text_requests_shared(text)
+    listed: list[dict] = []
+    list_spaces = getattr(spaces, "list_spaces", None)
+    if list_spaces is not None:
+        try:
+            listed = await _maybe(list_spaces(user_id)) or []
+        except Exception:
+            listed = []
+    shared_id = choose_shared_space(text, listed)
+    allow_shared = shared_id is not None
     try:
         space_ids = await _maybe(spaces.readable_space_ids(user_id))
     except Exception:
@@ -234,7 +310,7 @@ async def persist_drafts(
         if parsed["data"]["category"] not in CATEGORIES:
             continue
         try:
-            space_id = await _maybe(spaces.space_for(user_id, space))
+            space_id = shared_id if space == "shared" else await _maybe(spaces.space_for(user_id, space))
         except Exception:
             space_id = None
         if not space_id:

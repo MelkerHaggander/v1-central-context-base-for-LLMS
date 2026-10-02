@@ -8,6 +8,7 @@ import type {
   SubjectWrite,
 } from "./types";
 import type { MemoryStore, NearestHit } from "./store";
+import { deletionRetentionCutoff } from "./store";
 import { toIso } from "./time";
 
 const MEMORY_COLUMNS =
@@ -16,7 +17,8 @@ const MEMORY_COLUMNS =
 const VERSION_COLUMNS =
   "version_number, memory_id, space_id, changed_by, event, project, category, title_before, title_after, content_before, content_after, source, created_at" as const;
 
-const MEMORY_WITH_META = `${MEMORY_COLUMNS}, space_id, source` as const;
+/** List rows also need space meta and the creator id for the dashboard. */
+const MEMORY_WITH_META = `${MEMORY_COLUMNS}, space_id, source, user_id` as const;
 
 // PostgREST rejects a JSON array cast onto vector(3072). The pgvector
 // literal is what the column accepts, including under the halfvec index.
@@ -51,9 +53,11 @@ function asMemory(row: MemoryRecord): MemoryRecord {
   };
 }
 
-function asListed(row: MemoryRecord & { source?: unknown }): MemoryRecord {
+function asListed(row: MemoryRecord & { source?: unknown; user_id?: unknown }): MemoryRecord {
   const source = row.source === "dashboard" || row.source === "brain" ? row.source : null;
-  return { ...asMemory(row), source };
+  // Map the DB column to created_by so clients never see a raw user_id field.
+  const created_by = typeof row.user_id === "string" && row.user_id ? row.user_id : undefined;
+  return { ...asMemory(row), source, ...(created_by ? { created_by } : {}) };
 }
 
 function asVersion(row: MemoryVersion): MemoryVersion {
@@ -161,7 +165,34 @@ export function createSupabaseStore(client: Db): MemoryStore {
         current.content === fields.content;
       if (unchanged) return { kind: "updated", row: current };
 
-      if (current.title !== fields.title || current.content !== fields.content) {
+      // Title must stay unique inside the project (or among free-standing memories).
+      const spaceId = (raw as { space_id?: string | null }).space_id;
+      if (spaceId) {
+        const clash = await client
+          .from("memories")
+          .select("id")
+          .eq("space_id", spaceId)
+          .eq("project", fields.project)
+          .eq("title", fields.title)
+          .neq("id", id)
+          .maybeSingle();
+        if (clash.error) {
+          return { kind: "failed", code: "UPDATE_FAILED", message: "Kunde inte uppdatera minnet." };
+        }
+        if (clash.data) {
+          return {
+            kind: "failed",
+            code: "DUPLICATE_TITLE",
+            message: "A memory with that title already exists in this project.",
+          };
+        }
+      }
+
+      // Every field change is a version: title, content, project or category.
+      // The row carries the values before the change; the dashboard derives
+      // the "after" project/category from the next version or the live row.
+      // `unchanged` above already returned for an identical save.
+      {
         const versioned = await insertVersion(
           client,
           raw,
@@ -323,6 +354,25 @@ export function createSupabaseStore(client: Db): MemoryStore {
         return { kind: "updated", row: asMemory(updated.data as MemoryRecord) };
       }
 
+      // Title already used in this project under another category (or any other row).
+      const sameTitle = await client
+        .from("memories")
+        .select("id")
+        .eq("space_id", fields.spaceId)
+        .eq("project", fields.project)
+        .eq("title", fields.title)
+        .maybeSingle();
+      if (sameTitle.error) {
+        return { kind: "failed", code: "SAVE_FAILED", message: "Kunde inte spara minnet." };
+      }
+      if (sameTitle.data) {
+        return {
+          kind: "failed",
+          code: "DUPLICATE_TITLE",
+          message: "A memory with that title already exists in this project.",
+        };
+      }
+
       const inserted = await client
         .from("memories")
         .insert({
@@ -336,10 +386,21 @@ export function createSupabaseStore(client: Db): MemoryStore {
         })
         .select(MEMORY_COLUMNS)
         .single();
-      if (inserted.error?.code === "23505" || inserted.error || !inserted.data) {
+      if (inserted.error?.code === "23505") {
+        return {
+          kind: "failed",
+          code: "DUPLICATE_TITLE",
+          message: "A memory with that title already exists in this project.",
+        };
+      }
+      if (inserted.error || !inserted.data) {
         return { kind: "failed", code: "SAVE_FAILED", message: "Kunde inte spara minnet." };
       }
-      return { kind: "created", row: asMemory(inserted.data as MemoryRecord) };
+      // Include creator on create so the dashboard can show "Created by" without a reload.
+      return {
+        kind: "created",
+        row: { ...asMemory(inserted.data as MemoryRecord), source: fields.source, created_by: userId },
+      };
     },
 
     async setEmbedding(id, embedding) {
@@ -363,6 +424,20 @@ export function createSupabaseStore(client: Db): MemoryStore {
       if (result.error) throw new Error(result.error.message);
       const embedding = (result.data as { embedding?: unknown } | null)?.embedding;
       return embeddingPresent(embedding);
+    },
+
+    async listDeletions(spaceId) {
+      // Server also filters in listDeletions(); this cuts the transfer early.
+      const cutoff = deletionRetentionCutoff();
+      const result = await client
+        .from("memory_versions")
+        .select(VERSION_COLUMNS)
+        .eq("space_id", spaceId)
+        .eq("event", "delete")
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false });
+      if (result.error) throw new Error(result.error.message);
+      return ((result.data ?? []) as MemoryVersion[]).map(asVersion);
     },
 
     async listVersions(memoryId) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { countByCategory, filterMemories, summarise, summariseProjects } from "../lib/aggregate";
+import { countByCategory, filterMemories, summarise, summariseProjects, countProjects } from "../lib/aggregate";
 import { DISPLAY_ORDER } from "../lib/categories";
 import { firstProblem } from "../lib/validate-fields";
 import type { Memory } from "../lib/types";
@@ -71,6 +71,15 @@ describe("aggregate", () => {
     assert.equal(filterMemories(rows, { query: "  " }).length, 2);
     assert.equal(filterMemories(rows, { query: "nothing-here" }).length, 0);
   });
+
+  it("counts empty draft projects in the Projects tab badge", () => {
+    // Real projects come from memories; drafts are empty until the first save.
+    assert.equal(countProjects(0, 1), 1);
+    assert.equal(countProjects(2, 1), 3);
+    assert.equal(countProjects(0, 0), 0);
+    // Empty-project rows never inflate summarise().projects on their own.
+    assert.equal(summariseProjects([row({ id: "1", project: "" })]).length, 0);
+  });
 });
 
 describe("field validation mirrors the server", () => {
@@ -78,12 +87,12 @@ describe("field validation mirrors the server", () => {
 
   it("reports the first failure in the server's order", () => {
     assert.equal(firstProblem(good), null);
-    assert.match(firstProblem({ ...good, project: "  " })!, /project/i);
+    assert.equal(firstProblem({ ...good, project: "  " }), null);
     assert.match(firstProblem({ ...good, title: "" })!, /title/i);
     assert.match(firstProblem({ ...good, content: "" })!, /content/i);
     assert.match(firstProblem({ ...good, category: "Deadline" })!, /category/i);
-    // Several problems at once: project wins, exactly like INVALID_PROJECT does.
-    assert.match(firstProblem({ project: "", category: "x", title: "", content: "" })!, /project/i);
+    // Several problems at once: title wins when project is empty.
+    assert.match(firstProblem({ project: "", category: "x", title: "", content: "" })!, /title/i);
   });
 
   it("enforces the same lengths and trims first", () => {

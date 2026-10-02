@@ -17,7 +17,8 @@ export function firstProblem(fields: MemoryFields): string | null {
   const title = fields.title.trim();
   const content = fields.content.trim();
 
-  if (project.length < 1) return "A project name is required.";
+  // Empty project = a free-standing memory (not a mini-project). Projects are
+  // created in the Projects tab and then attached when saving into one.
   if (project.length > LIMITS.project) return `Project must be ${LIMITS.project} characters or fewer.`;
   if (title.length < 1) return "A title is required.";
   if (title.length > LIMITS.title) return `Title must be ${LIMITS.title} characters or fewer.`;

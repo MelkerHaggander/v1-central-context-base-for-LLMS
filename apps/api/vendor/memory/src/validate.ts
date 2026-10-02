@@ -14,8 +14,8 @@ export function validateMemoryInput(input: MemoryInput) {
   const content = input.content?.trim() ?? "";
   const category = input.category?.trim() ?? "";
 
-  if (project.length < 1 || project.length > 100) {
-    return fail("INVALID_PROJECT", "project måste vara 1–100 tecken.");
+  if (project.length > 100) {
+    return fail("INVALID_PROJECT", "project måste vara högst 100 tecken.");
   }
   if (title.length < 1 || title.length > 150) {
     return fail("INVALID_TITLE", "title måste vara 1–150 tecken.");

@@ -82,7 +82,20 @@ export async function proxyToUpstream(request: Request, path: string): Promise<R
 
   const contentType = upstream.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
-    // T.ex. Vercels inloggningssida (HTML) vid Deployment Protection, eller en 404 från main.
+    // Nothing reads this body, so release the connection now instead of at GC.
+    await upstream.body?.cancel().catch(() => undefined);
+    // 404 or 405 without JSON is Next's own page for a route that does not
+    // exist. It gets its own code, so "the API has no such endpoint" (the
+    // proposed team endpoints today) is never confused with a 500 or a
+    // gateway error, which must read as a failure.
+    if (upstream.status === 404 || upstream.status === 405) {
+      return json(
+        { error: { code: "UPSTREAM_NO_ROUTE", message: `The API has no ${method} ${path}.` } },
+        upstream.status,
+        out,
+      );
+    }
+    // T.ex. Vercels inloggningssida (HTML) vid Deployment Protection, eller ett 5xx.
     return json(
       {
         error: {

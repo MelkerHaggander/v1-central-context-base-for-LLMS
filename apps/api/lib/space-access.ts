@@ -1,37 +1,39 @@
-import type { SpaceAccess, SpaceKind } from "@v1/memory";
+import type { SpaceAccess, SpaceKind, SpaceRef } from "@v1/memory";
 
-type QueryResult<T> = { data: T | null; error: { message: string } | null };
-
-type SpaceQuery = {
-  select(columns: string): SpaceQuery;
-  eq(column: string, value: string): SpaceQuery;
-  in(column: string, values: string[]): PromiseLike<QueryResult<Array<{ id: string; kind: SpaceKind }>>>;
-  maybeSingle(): PromiseLike<QueryResult<{ user_id?: string }>>;
-  then<T>(
-    onfulfilled?: ((value: QueryResult<Array<{ space_id: string }>>) => T | PromiseLike<T>) | null,
-  ): PromiseLike<T>;
+type SpaceDb = {
+  from(table: string): {
+    select(columns: string): any;
+  };
 };
 
-type MemberClient = {
-  from(table: string): SpaceQuery;
-};
+export function createSupabaseSpaceAccess(client: SpaceDb): SpaceAccess {
+  async function readableSpaceIds(userId: string): Promise<string[]> {
+    const result = await client.from("space_members").select("space_id").eq("user_id", userId);
+    if (result.error) throw new Error(result.error.message);
+    return (result.data ?? []).map((row: { space_id: string }) => row.space_id).filter(Boolean);
+  }
 
-export function createSupabaseSpaceAccess(client: MemberClient): SpaceAccess {
+  async function listSpaces(userId: string): Promise<SpaceRef[]> {
+    const ids = await readableSpaceIds(userId);
+    if (ids.length === 0) return [];
+    const spaces = await client.from("spaces").select("id, kind").in("id", ids);
+    if (spaces.error) throw new Error(spaces.error.message);
+    return (spaces.data ?? []).flatMap((row: { id: string; kind: string }) => {
+      if (row.kind !== "personal" && row.kind !== "shared") return [];
+      const kind: SpaceKind = row.kind;
+      return [{ id: row.id, kind }];
+    });
+  }
+
   return {
-    async readableSpaceIds(userId) {
-      const result = await client.from("space_members").select("space_id").eq("user_id", userId);
-      if (result.error) throw new Error(result.error.message);
-      return (result.data ?? []).map((row) => row.space_id).filter(Boolean);
-    },
-
+    readableSpaceIds,
+    listSpaces,
     async spaceFor(userId, kind) {
-      const ids = await this.readableSpaceIds(userId);
-      if (ids.length === 0) return null;
-      const spaces = await client.from("spaces").select("id, kind").in("id", ids);
-      if (spaces.error) throw new Error(spaces.error.message);
-      return (spaces.data ?? []).find((row) => row.kind === kind)?.id ?? null;
+      const spaces = await listSpaces(userId);
+      const matches = spaces.filter((row) => row.kind === kind);
+      if (kind === "shared" && matches.length !== 1) return null;
+      return matches[0]?.id ?? null;
     },
-
     async isMember(userId, spaceId) {
       const result = await client
         .from("space_members")

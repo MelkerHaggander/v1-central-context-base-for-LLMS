@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cosineSimilarity } from "../src/brain";
+import { chooseSharedSpace, cosineSimilarity, textConfirmsTeamSave } from "../src/brain";
 import { createInMemoryStore } from "../src/in-memory";
 import {
   CONTEXT_ITEM_LIMIT,
@@ -28,6 +28,14 @@ function memberSpaces(userId: string, readable: string[] = [PERSONAL, SHARED]): 
     },
     async isMember(id, spaceId) {
       return id === userId && readable.includes(spaceId);
+    },
+    async listSpaces(id) {
+      if (id !== userId) return [];
+      return readable.flatMap((spaceId) => {
+        if (spaceId === PERSONAL) return [{ id: spaceId, kind: "personal" as const }];
+        if (spaceId === SHARED) return [{ id: spaceId, kind: "shared" as const, name: "Boring" }];
+        return [];
+      });
     },
   };
 }
@@ -1125,7 +1133,7 @@ test("four fields without a brief are INVALID_CONTENT", async () => {
   assert.equal(store.snapshot().length, 0);
 });
 
-test("shared is personal unless the text explicitly asks for shared", async () => {
+test("asking to save to the shared space selects team when there is one team", async () => {
   const store = createInMemoryStore();
   const seen: string[] = [];
   const formulator: MemoryFormulator = {
@@ -1137,7 +1145,9 @@ test("shared is personal unless the text explicitly asks for shared", async () =
         space: "shared",
         project: "Boring Context",
         category: "fact",
-        title: input.text.includes("shared") ? "Shared fact" : "Personal fact",
+        title: input.text.includes("shared") || input.text.includes("team")
+          ? "Shared fact"
+          : "Personal fact",
         content: "Stored from the draft.",
       }];
     },
@@ -1148,10 +1158,81 @@ test("shared is personal unless the text explicitly asks for shared", async () =
     formulator,
   });
   const personal = await memory.saveBrief(USER_A, { brief: "Remember the API path." });
-  const shared = await memory.saveBrief(USER_A, { brief: "Please store this in the shared space." });
+  const wordOnly = await memory.saveBrief(USER_A, { brief: "Please store this in the shared space." });
+  const swedish = await memory.saveBrief(USER_A, { brief: "Spara i team att vi lanserar open source." });
+  const shared = await memory.saveBrief(USER_A, { brief: "Yes, save this in the shared space." });
+  assert.ok("data" in wordOnly);
+  assert.equal(wordOnly.data.items[0]?.space, "shared");
+  assert.equal(wordOnly.data.items[0]?.space_id, SHARED);
+  assert.ok("data" in swedish);
+  assert.equal(swedish.data.items[0]?.space, "shared");
+  assert.equal(swedish.data.items[0]?.space_id, SHARED);
   assert.ok("data" in personal && "data" in shared);
   assert.equal(personal.data.items[0]?.space, "personal");
   assert.equal(personal.data.items[0]?.space_id, PERSONAL);
   assert.equal(shared.data.items[0]?.space, "shared");
   assert.equal(shared.data.items[0]?.space_id, SHARED);
+});
+
+test("yes without a named team stays personal when several teams exist", async () => {
+  const alpha = "aaaaaaaa-aaaa-4aaa-8aaa-000000000021";
+  const beta = "aaaaaaaa-aaaa-4aaa-8aaa-000000000022";
+  const store = createInMemoryStore();
+  const memory = createMemoryApi(store, {
+    spaces: {
+      async readableSpaceIds() {
+        return [PERSONAL, alpha, beta];
+      },
+      async spaceFor(_id, kind) {
+        return kind === "personal" ? PERSONAL : alpha;
+      },
+      async isMember() {
+        return true;
+      },
+      async listSpaces() {
+        return [
+          { id: PERSONAL, kind: "personal" },
+          { id: alpha, kind: "shared", name: "Alpha" },
+          { id: beta, kind: "shared", name: "Beta" },
+        ];
+      },
+    },
+    formulator: {
+      async formulate() {
+        return [{
+          space: "shared",
+          project: "Boring Context",
+          category: "fact",
+          title: "Team fact",
+          content: "Stored from the draft.",
+        }];
+      },
+    },
+  });
+  const unnamed = await memory.saveBrief(USER_A, { brief: "Ja, spara i teamet." });
+  const named = await memory.saveBrief(USER_A, { brief: "Ja, spara i teamet Beta." });
+  const farApart = await memory.saveBrief(USER_A, {
+    brief: `Ja. ${"ord ".repeat(40)}spara i teamet Beta.`,
+  });
+  assert.ok("data" in unnamed && "data" in named && "data" in farApart);
+  assert.equal(unnamed.data.items[0]?.space_id, PERSONAL);
+  assert.equal(named.data.items[0]?.space_id, beta);
+  assert.equal(farApart.data.items[0]?.space_id, PERSONAL);
+  assert.equal(textConfirmsTeamSave("Spara detta gemensamt."), true);
+  assert.equal(textConfirmsTeamSave("Ja, spara detta gemensamt."), true);
+  assert.equal(textConfirmsTeamSave("Det gemensamma mötet var bra."), false);
+  assert.equal(
+    chooseSharedSpace("Ja, spara i teamet Alpha.", [
+      { id: alpha, kind: "shared", name: "Alpha" },
+      { id: beta, kind: "shared", name: "Beta" },
+    ]),
+    alpha,
+  );
+  assert.equal(
+    chooseSharedSpace("Spara i teamet.", [
+      { id: alpha, kind: "shared", name: "Alpha" },
+      { id: beta, kind: "shared", name: "Beta" },
+    ]),
+    null,
+  );
 });
