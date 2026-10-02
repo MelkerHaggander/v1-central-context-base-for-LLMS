@@ -3,7 +3,8 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+// Keep this as path segments. Webpack treats new URL("../../..") as a module.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 type Launch = {
   command: string;
