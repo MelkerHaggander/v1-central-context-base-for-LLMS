@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from boringcontext.brain import choose_shared_space, text_confirms_team_save
+from boringcontext.brain import choose_shared_space, shared_save_plan, text_confirms_team_save
 from boringcontext.clients import formulator_request
 from boringcontext.memory_store import InMemoryStore
 from boringcontext.runtime import run_brain_call
@@ -94,8 +94,18 @@ async def test_several_teams_need_a_name_next_to_the_save():
     named = await memory.save_brief(USER_A, {"brief": "Ja, spara i teamet Beta."})
     assert unnamed["error"]["code"] == "TEAM_CHOICE"
     assert asked["error"]["code"] == "TEAM_CHOICE"
+    assert "Alpha" in unnamed["error"]["message"]
+    assert "Beta" in unnamed["error"]["message"]
     assert "items" not in unnamed
     assert named["data"]["items"][0]["space_id"] == BETA
+    yes = await memory.save_brief(USER_A, {"brief": "ja"})
+    assert yes["data"]["items"][0]["space_id"] == PERSONAL
+    assert choose_shared_space("ja", [
+        {"id": ALPHA, "kind": "shared", "name": "Alpha"},
+        {"id": BETA, "kind": "shared", "name": "Beta"},
+    ]) is None
+    reply = await memory.save_brief(USER_A, {"brief": "Beta"})
+    assert reply["data"]["items"][0]["space_id"] == BETA
     assert text_confirms_team_save("Spara detta gemensamt.") is True
     assert text_confirms_team_save("Detta är gemensam för teamet.") is True
     assert text_confirms_team_save("Lägg minnet i det gemensamma utrymmet.") is True
@@ -108,6 +118,91 @@ async def test_several_teams_need_a_name_next_to_the_save():
         {"id": ALPHA, "kind": "shared", "name": "Alpha"},
         {"id": BETA, "kind": "shared", "name": "Beta"},
     ]) is None
+
+
+def test_mentioning_the_team_does_not_share():
+    teams = [{"id": SHARED, "kind": "shared", "name": "Boring"}]
+    assert shared_save_plan("Spara att teamet valde silver.", teams) == {"mode": "personal"}
+    assert shared_save_plan("Teamet sa ja till förslaget.", teams) == {"mode": "personal"}
+    assert shared_save_plan("Spara det här i det gemensamma utrymmet", teams) == {"mode": "shared", "id": SHARED}
+    assert shared_save_plan("share this with the team", teams) == {"mode": "shared", "id": SHARED}
+    several = [
+        {"id": ALPHA, "kind": "shared", "name": "Alpha"},
+        {"id": BETA, "kind": "shared", "name": "Beta"},
+    ]
+    assert shared_save_plan("ja", several) == {"mode": "personal"}
+    assert shared_save_plan("Beta", several) == {"mode": "shared", "id": BETA}
+
+
+@pytest.mark.asyncio
+async def test_a_mixed_brief_keeps_a_personal_draft():
+    class Mixed:
+        def __init__(self, drafts):
+            self.drafts = drafts
+            self.spaces = Spaces([{"id": SHARED, "kind": "shared", "name": "Boring"}])
+            self.embedding = None
+            self.formulator = self
+
+        async def formulate(self, _payload):
+            return self.drafts
+
+    shared_brief = "Spara det här i det gemensamma utrymmet"
+    memory = create_memory_api(
+        InMemoryStore(),
+        Mixed([
+            {"space": "personal", "project": "Boring Context", "category": "fact", "title": "Private note", "content": "Stays with the person."},
+            {"project": "Boring Context", "category": "fact", "title": "Unspecified note", "content": "Follows the brief."},
+            {"space": "shared", "project": "Boring Context", "category": "fact", "title": "Shared note", "content": "Asked to be shared."},
+        ]),
+    )
+    saved = await memory.save_brief(USER_A, {"brief": shared_brief})
+    assert [(item["title"], item["space"], item["space_id"]) for item in saved["data"]["items"]] == [
+        ("Private note", "personal", PERSONAL),
+        ("Unspecified note", "shared", SHARED),
+        ("Shared note", "shared", SHARED),
+    ]
+    personal = create_memory_api(
+        InMemoryStore(),
+        Mixed([
+            {"project": "Boring Context", "category": "fact", "title": "No choice", "content": "Follows a personal brief."},
+        ]),
+    )
+    stayed = await personal.save_brief(USER_A, {"brief": "Remember the API path."})
+    assert stayed["data"]["items"][0]["space"] == "personal"
+    assert stayed["data"]["items"][0]["space_id"] == PERSONAL
+
+
+@pytest.mark.asyncio
+async def test_team_lookup_failure_returns_an_error():
+    class Broken(Spaces):
+        async def list_spaces(self, _user_id):
+            raise RuntimeError("space lookup failed")
+
+    store = InMemoryStore()
+    memory = create_memory_api(store, Brain(Broken([{"id": SHARED, "kind": "shared", "name": "Boring"}])))
+    failed = await memory.save_brief(USER_A, {"brief": "Spara i team att vi lanserar open source."})
+    assert failed["error"]["code"] == "SPACES_FAILED"
+    assert "items" not in failed
+    assert await store.list_by_user(USER_A) == []
+
+    class Flaky(Spaces):
+        def __init__(self, teams):
+            super().__init__(teams)
+            self.calls = 0
+
+        async def list_spaces(self, user_id):
+            self.calls += 1
+            if self.calls > 1:
+                raise RuntimeError("space lookup failed")
+            return await super().list_spaces(user_id)
+
+    second = InMemoryStore()
+    again = await create_memory_api(second, Brain(Flaky([{"id": SHARED, "kind": "shared", "name": "Boring"}]))).save_brief(
+        USER_A,
+        {"brief": "Spara det här i det gemensamma utrymmet"},
+    )
+    assert again["error"]["code"] == "SPACES_FAILED"
+    assert await second.list_by_user(USER_A) == []
 
 
 def test_empty_project_is_allowed_and_titles_stay_unique():

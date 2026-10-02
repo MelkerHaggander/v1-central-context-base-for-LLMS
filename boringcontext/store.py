@@ -5,14 +5,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from boringcontext.brain import (
+    SpaceLookupError,
     apply_vector_ranking,
     attach_embedding,
     canonical_project,
+    load_listed_spaces,
     persist_drafts,
     project_key,
     rank_sort_key,
     recent_identities,
     shared_save_plan,
+    team_choice_message,
 )
 from boringcontext.jsonutil import js_json
 from boringcontext.validate import fail, validate_memory_id, validate_memory_input, validate_search_input
@@ -720,15 +723,12 @@ async def save_brief(user_id: str, brief: dict, store: Any, brain: Any | None = 
         space_ids = []
     prompt = brief.get("prompt") or ""
     joined = "\n".join(part for part in (text, prompt) if part)
-    listed: list[dict] = []
-    list_spaces = getattr(spaces, "list_spaces", None) if spaces is not None else None
-    if list_spaces is not None:
-        try:
-            listed = await _maybe(list_spaces(user_id)) or []
-        except Exception:
-            listed = []
+    try:
+        listed = await load_listed_spaces(spaces, user_id)
+    except SpaceLookupError:
+        return fail("SPACES_FAILED", "Utrymmena kunde inte hämtas.")
     if shared_save_plan(joined, listed)["mode"] == "ask":
-        return fail("TEAM_CHOICE", "Vilket team ska minnet sparas i?")
+        return fail("TEAM_CHOICE", team_choice_message(listed))
     try:
         existing = await recent_identities(user_id, space_ids, store)
         payload = {
@@ -743,15 +743,18 @@ async def save_brief(user_id: str, brief: dict, store: Any, brain: Any | None = 
         drafts = await _maybe(formulator.formulate(payload))
     except Exception:
         return fail("FORMULATE_FAILED", "Kunde inte tolka minnet.")
-    items = await persist_drafts(
-        user_id=user_id,
-        drafts=drafts,
-        text=joined,
-        project=brief.get("project"),
-        store=store,
-        brain=brain,
-        limit=SAVED_ROW_LIMIT,
-    )
+    try:
+        items = await persist_drafts(
+            user_id=user_id,
+            drafts=drafts,
+            text=joined,
+            project=brief.get("project"),
+            store=store,
+            brain=brain,
+            limit=SAVED_ROW_LIMIT,
+        )
+    except SpaceLookupError:
+        return fail("SPACES_FAILED", "Utrymmena kunde inte hämtas.")
     return {"data": {"items": items}}
 
 

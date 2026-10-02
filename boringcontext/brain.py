@@ -12,14 +12,10 @@ NEIGHBOR_SIMILARITY = 0.55
 IDENTITY_LIMIT = 50
 NEAREST_LIMIT = 32
 
-_TEAM_WORD = re.compile(
-    r"\b(?:teamet|teamen|team|gemensamt|gemensamma|shared)\b|\bshare (?:this|it|that|these) with\b",
-    re.IGNORECASE,
-)
-_SAVE_WORD = re.compile(r"\b(?:spara|save|store)\b", re.IGNORECASE)
-_YES_WORD = re.compile(r"\b(?:ja|japp|yes)\b", re.IGNORECASE)
 _SHARED_PHRASE = re.compile(
-    r"\bin the shared(?:\s+space)?\b|\b(?:to|with) the team\b",
+    r"\bin the shared(?:\s+space)?\b"
+    r"|\b(?:to|with) the team\b"
+    r"|\bshare (?:this|it|that|these) with\b",
     re.IGNORECASE,
 )
 # A destination, not a passing mention. "Det gemensamma mötet" stays personal.
@@ -30,8 +26,15 @@ _SHARED_DESTINATION = re.compile(
     r"|\bgemensamma\s+utrymmet\b",
     re.IGNORECASE,
 )
-YES_NEAR_TEAM = 80
-SAVE_NEAR_TEAM = 60
+# The verb has to aim at the shared place. "Spara att teamet valde" only
+# mentions the team, and "ja" is not a choice of the first team.
+_SHARE_REQUEST = re.compile(
+    r"\b(?:spara|save|store|lägg|lagra)\b(?:\s+\S+){0,8}\s+"
+    r"(?:i|till|åt|på|in|to|with|for)\s+(?:ett\s+|det\s+|the\s+)?team(?:et|en)?\b"
+    r"|\b(?:spara|save|store|lägg|lagra)\b(?:\s+\S+){0,8}\s+gemensamt\b",
+    re.IGNORECASE,
+)
+_YES_REPLY = re.compile(r"^(?:ja|japp|yes)$", re.IGNORECASE)
 
 
 def project_key(project: str) -> str:
@@ -51,16 +54,9 @@ def text_confirms_team_save(text: str) -> bool:
     normalized = unicodedata.normalize("NFKC", text)
     if _SHARED_DESTINATION.search(normalized):
         return True
-    team_hits = [match.start() for match in _TEAM_WORD.finditer(normalized)]
-    if not team_hits:
-        return _SHARED_PHRASE.search(normalized) is not None
-    save_hits = [match.start() for match in _SAVE_WORD.finditer(normalized)]
-    if any(abs(save - team) <= SAVE_NEAR_TEAM for save in save_hits for team in team_hits):
-        return True
     if _SHARED_PHRASE.search(normalized):
         return True
-    yes_hits = [match.start() for match in _YES_WORD.finditer(normalized)]
-    return any(abs(yes - team) <= YES_NEAR_TEAM for yes in yes_hits for team in team_hits)
+    return _SHARE_REQUEST.search(normalized) is not None
 
 
 def text_requests_shared(text: str) -> bool:
@@ -111,21 +107,64 @@ def _shared_teams(spaces: list[dict]) -> list[dict]:
     return [space for space in spaces if space.get("kind") == "shared" and str(space.get("id") or "").strip()]
 
 
+def _reply_line(text: str) -> str:
+    for line in unicodedata.normalize("NFKC", text).splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped.casefold().rstrip(".!?").strip()
+    return ""
+
+
+def _reply_chooses_team(text: str, teams: list[dict]) -> str | None:
+    """A reply that is one team name chooses that team. "ja" does not."""
+    folded = _reply_line(text)
+    if not folded or _YES_REPLY.match(folded):
+        return None
+    matches: list[str] = []
+    for team in teams:
+        name = str(team.get("name") or "").strip()
+        if len(name) < 2:
+            continue
+        key = name.casefold()
+        aliases = {key, f"teamet {key}", f"team {key}", f"i {key}", f"i teamet {key}"}
+        if folded in aliases:
+            team_id = str(team.get("id") or "")
+            if team_id and team_id not in matches:
+                matches.append(team_id)
+    return matches[0] if len(matches) == 1 else None
+
+
+def team_choice_message(spaces: list[dict]) -> str:
+    names: list[str] = []
+    for team in _shared_teams(spaces):
+        name = str(team.get("name") or "").strip()
+        if name and name not in names:
+            names.append(name)
+    if not names:
+        return "Vilket team ska minnet sparas i?"
+    return "Vilket team ska minnet sparas i? " + ", ".join(names) + "."
+
+
 def shared_save_plan(text: str, spaces: list[dict]) -> dict:
     """Where a brief that may ask for the shared space should land.
 
-    One shared space and a request: that space. Several teams and no single
-    named team: ask, do not guess. No shared space: personal, the contract default.
+    A clear request and one shared space: that space. Several teams and no
+    single named team: ask, and list the names. A reply that is one of those
+    names chooses it. Mentioning the team, or answering ja, does not.
+    No shared space: personal, the contract default.
     """
     teams = _shared_teams(spaces)
-    if not text_requests_shared(text) or not teams:
-        return {"mode": "personal"}
-    if len(teams) == 1:
-        return {"mode": "shared", "id": teams[0]["id"]}
-    chosen = choose_shared_space(text, spaces)
-    if chosen:
-        return {"mode": "shared", "id": chosen}
-    return {"mode": "ask"}
+    if text_requests_shared(text) and teams:
+        if len(teams) == 1:
+            return {"mode": "shared", "id": teams[0]["id"]}
+        chosen = choose_shared_space(text, spaces)
+        if chosen:
+            return {"mode": "shared", "id": chosen}
+        return {"mode": "ask"}
+    named = _reply_chooses_team(text, teams)
+    if named:
+        return {"mode": "shared", "id": named}
+    return {"mode": "personal"}
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -252,14 +291,35 @@ async def recent_identities(user_id: str, space_ids: list[str], store: Any) -> l
 
 
 def _draft_space(draft: dict, allow_shared: bool) -> str | None:
-    if allow_shared:
-        return "shared"
+    # The draft's own space is read first. A brief that asks for shared does
+    # not rewrite a draft the formulator marked personal. No choice follows the brief.
     space = draft.get("space")
-    if space is None or space == "personal":
+    if space == "personal":
         return "personal"
     if space == "shared":
-        return "personal"
+        return "shared" if allow_shared else "personal"
+    if space is None:
+        return "shared" if allow_shared else "personal"
     return None
+
+
+class SpaceLookupError(Exception):
+    """The team list could not be read. Callers return an error, not personal."""
+
+
+async def load_listed_spaces(spaces: Any, user_id: str) -> list[dict]:
+    list_spaces = getattr(spaces, "list_spaces", None) if spaces is not None else None
+    if list_spaces is None:
+        return []
+    try:
+        listed = await _maybe(list_spaces(user_id))
+    except Exception as error:
+        raise SpaceLookupError("Utrymmena kunde inte hämtas.") from error
+    if listed is None:
+        return []
+    if not isinstance(listed, list):
+        raise SpaceLookupError("Utrymmena kunde inte hämtas.")
+    return listed
 
 
 async def _known_projects(user_id: str, space_ids: list[str], store: Any) -> list[str]:
@@ -304,13 +364,7 @@ async def persist_drafts(
     upsert = getattr(store, "upsert_subject", None)
     if spaces is None or upsert is None:
         return []
-    listed: list[dict] = []
-    list_spaces = getattr(spaces, "list_spaces", None)
-    if list_spaces is not None:
-        try:
-            listed = await _maybe(list_spaces(user_id)) or []
-        except Exception:
-            listed = []
+    listed = await load_listed_spaces(spaces, user_id)
     plan = shared_save_plan(text, listed)
     if plan["mode"] == "ask":
         return []

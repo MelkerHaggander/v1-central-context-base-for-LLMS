@@ -42,6 +42,16 @@ def test_missing_env_keeps_an_empty_memory_store():
     assert denied.status_code == 401
 
 
+def test_secret_key_is_not_used_and_publishable_key_is():
+    secret = {"SUPABASE_URL": URL, "SUPABASE_ANON_KEY": "sb_secret_test_value"}
+    assert supabase_config(secret) is None
+    assert isinstance(create_runtime_app(secret).state.memory.store, InMemoryStore)
+    shouted = {"SUPABASE_URL": URL, "SUPABASE_PUBLISHABLE_KEY": "SB_SECRET_test_value"}
+    assert supabase_config(shouted) is None
+    assert supabase_config({"SUPABASE_URL": URL, "SUPABASE_ANON_KEY": "sb_publishable_test"}) == (URL, "sb_publishable_test")
+    assert supabase_config({"SUPABASE_URL": URL, "SUPABASE_ANON_KEY": _jwt({"role": "service_role"})}) is None
+
+
 def test_service_role_key_is_not_used():
     env = {
         "SUPABASE_URL": URL,

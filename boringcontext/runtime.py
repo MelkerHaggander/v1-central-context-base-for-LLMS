@@ -2,8 +2,9 @@
 
 Supabase is used only when a project URL and an anon or publishable key are
 set. Otherwise the process keeps an empty in-memory store, so the offline
-tests never open a socket. The service-role key is ignored: memory policies
-require `auth.uid()`, and that role would skip them.
+tests never open a socket. A secret key (`sb_secret`) and a service-role JWT
+are ignored: memory policies require `auth.uid()`, and those credentials
+would skip them. Publishable keys (`sb_publishable`) may be used.
 """
 
 from __future__ import annotations
@@ -67,6 +68,9 @@ def supabase_config(env: dict[str, str | None] | None = None) -> tuple[str, str]
         if key:
             break
     if not url or not key:
+        return None
+    # sb_secret is the new service credential. sb_publishable is not.
+    if key.lower().startswith("sb_secret"):
         return None
     if not (key.startswith("eyJ") or key.startswith("sb_")):
         return None
