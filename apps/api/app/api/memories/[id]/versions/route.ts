@@ -1,8 +1,6 @@
-import { createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOwned } from "@/lib/http";
-import { getMemoryVersions } from "@/lib/memory-http";
-import { createSupabaseSpaceAccess } from "@/lib/space-access";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { callPythonBrain, memoryHttpStatus } from "@/lib/python-brain";
+import { signedIn } from "@/lib/signed-in";
 
 export const dynamic = "force-dynamic";
 
@@ -10,20 +8,13 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
-  }
+  const auth = await signedIn();
+  if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const result = await getMemoryVersions(data.user.id, id, {
-    store: createSupabaseStore(supabase),
-    spaces: createSupabaseSpaceAccess(supabase),
-  });
-  if (result.status >= 400) {
-    const body = result.body as { error: { code: string; message: string } };
-    return jsonError(body.error.code, body.error.message, result.status);
+  const result = await callPythonBrain("list_versions", auth.userId, { id }, auth.bearer);
+  if (result.error) {
+    return jsonError(result.error.code, result.error.message, memoryHttpStatus(result.error.code, "remove"));
   }
-  return jsonOwned(result.body, data.user.id);
+  return jsonOwned(result.data, auth.userId);
 }

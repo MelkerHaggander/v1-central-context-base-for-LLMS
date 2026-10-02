@@ -1,15 +1,12 @@
-import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOk } from "@/lib/http";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { callPythonBrain, memoryHttpStatus } from "@/lib/python-brain";
+import { signedIn } from "@/lib/signed-in";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
-  }
+  const auth = await signedIn();
+  if ("error" in auth) return auth.error;
 
   let body: Record<string, unknown>;
   try {
@@ -18,17 +15,20 @@ export async function POST(request: Request) {
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const api = createMemoryApi(createSupabaseStore(supabase));
-  const result = await api.saveMemory(data.user.id, {
-    project: String(body.project ?? ""),
-    category: String(body.category ?? ""),
-    title: String(body.title ?? ""),
-    content: String(body.content ?? ""),
-  });
+  const result = await callPythonBrain(
+    "save_memory",
+    auth.userId,
+    {
+      project: String(body.project ?? ""),
+      category: String(body.category ?? ""),
+      title: String(body.title ?? ""),
+      content: String(body.content ?? ""),
+    },
+    auth.bearer,
+  );
 
-  if ("error" in result) {
-    const status = result.error.code.startsWith("INVALID_") ? 400 : 500;
-    return jsonError(result.error.code, result.error.message, status);
+  if (result.error) {
+    return jsonError(result.error.code, result.error.message, memoryHttpStatus(result.error.code, "save"));
   }
   return jsonOk(result.data);
 }

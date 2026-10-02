@@ -8,7 +8,7 @@
  * v4 UUIDs, so a row keeps its place on the sphere between fetches.
  */
 import { MOCK_ACCOUNTS } from "./accounts";
-import { MockMemoryStore } from "./store";
+import { MockMemoryStore, type Row } from "./store";
 import type { Memory } from "../types";
 
 type Seed = Omit<Memory, "id" | "created_at" | "updated_at"> & { day: number; hour: number };
@@ -44,24 +44,157 @@ const EXAMPLES: Seed[] = [
   { project: "Research", category: "goal", title: "Measure what the model actually saves", content: "Count tool calls per session to see whether the instructions change behaviour.", day: 17, hour: 14 },
 ];
 
+/** Spaces as Alfredo's supabase/manual/20261005_space_members.sql sets them up:
+ *  one personal space per account, one shared space with all three. */
+export const PERSONAL_SPACE: Record<string, string> = Object.fromEntries(
+  MOCK_ACCOUNTS.map((account, a) => [account.id, `5a0e0000-0000-4000-8000-00000000000${a + 1}`]),
+);
+export const SHARED_SPACE = "5a0e0000-0000-4000-8000-0000000000ff";
+
+type TeamSeed = Seed & { author: number; source: "dashboard" | "brain"; hoursAgo?: number };
+
+/**
+ * The team space. A few rows are only hours old at seed time so the 24 hour
+ * marker has something to mark, one pair is a near duplicate so the duplicate
+ * finder has something to find, and two rows carry history written by a
+ * teammate so the history panel can show "who".
+ */
+const TEAM: TeamSeed[] = [
+  { project: "Boringcontext", category: "deadline", title: "Integration v1.2", content: "Alla tre delar ska vara ihopkopplade måndag 5 oktober. Därefter börjar omfattande testning.", day: 22, hour: 9, author: 1, source: "dashboard" },
+  { project: "Boringcontext", category: "decision", title: "Embedding model", content: "OpenAI text-embedding-3-large, dimension 3072, cosine. Same model for rows and queries.", day: 26, hour: 10, author: 2, source: "brain" },
+  { project: "Boringcontext", category: "decision", title: "Brain model", content: "Always Claude Sonnet 5, temperature 0, fixed JSON schema. Not Opus.", day: 26, hour: 11, author: 2, source: "brain" },
+  { project: "Boringcontext", category: "fact", title: "One MCP address", content: "Same MCP address after the integration. No new OAuth clients.", day: 24, hour: 13, author: 1, source: "brain" },
+  { project: "Boringcontext", category: "preference", title: "Personal is the default", content: "MCP saves to personal unless the user says yes to the team.", day: 24, hour: 15, author: 1, source: "dashboard" },
+  { project: "Boringcontext", category: "goal", title: "Open source plus hosted", content: "Open source code for technical users, a paid hosted service for everyone else.", day: 21, hour: 18, author: 1, source: "dashboard" },
+  { project: "Boringcontext", category: "goal", title: "Open source and a hosted plan", content: "The code is open source. Non-technical users pay for a hosted service.", day: 0, hour: 0, author: 2, source: "brain", hoursAgo: 5 },
+  { project: "Boringcontext", category: "deadline", title: "Integration day", content: "Monday 5 October: Alfredo runs the migration, then the members file.", day: 0, hour: 0, author: 2, source: "brain", hoursAgo: 3 },
+  { project: "Mässa", category: "goal", title: "Ten conversations", content: "Talk to at least ten visitors about scattered project context.", day: 22, hour: 12, author: 1, source: "dashboard" },
+  { project: "Mässa", category: "fact", title: "Question list", content: "Spontaneous reaction, concrete situation, what makes you hesitate, what would v1 need.", day: 22, hour: 13, author: 1, source: "dashboard" },
+  { project: "Mässa", category: "lesson", title: "Do not pitch first", content: "Ask about their situation before describing the product.", day: 0, hour: 0, author: 0, source: "brain", hoursAgo: 20 },
+  { project: "Infra", category: "decision", title: "pgvector in the same database", content: "No separate vector database. One column on memories, filtered by space_id and RLS.", day: 25, hour: 17, author: 2, source: "brain" },
+  { project: "Infra", category: "lesson", title: "Empty spaces blind RLS", content: "Run the members file after the migration, or nobody can read anything.", day: 26, hour: 20, author: 2, source: "brain" },
+];
+
+function iso(date: Date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 function seed() {
-  const rows: Array<Memory & { user_id: string }> = [];
+  const rows: Row[] = [];
   MOCK_ACCOUNTS.forEach((account, a) => {
     EXAMPLES.forEach((example, i) => {
       const { day, hour, ...fields } = example;
       // Fixed valid v4 UUIDs so a row keeps the same id, and the same spot on the globe.
-      const id = `a${a}${String(i).padStart(3, "0")}0000-0000-4000-8000-${String(a * 100 + i).padStart(12, "0")}`;
+      const id = `a${a}${String(i).padStart(3, "0")}000-0000-4000-8000-${String(a * 100 + i).padStart(12, "0")}`;
       const stamp = `2026-09-${String(day).padStart(2, "0")}T${String((hour + a) % 24).padStart(2, "0")}:00:00Z`;
-      rows.push({ id, user_id: account.id, ...fields, created_at: stamp, updated_at: stamp });
+      rows.push({
+        id,
+        user_id: account.id,
+        space_id: PERSONAL_SPACE[account.id],
+        source: i % 3 === 0 ? "dashboard" : "brain",
+        ...fields,
+        created_at: stamp,
+        updated_at: stamp,
+      });
+    });
+  });
+
+  const now = Date.now();
+  TEAM.forEach((example, i) => {
+    const { day, hour, author, source, hoursAgo, ...fields } = example;
+    const id = `b0${String(i).padStart(6, "0")}-0000-4000-8000-${String(900 + i).padStart(12, "0")}`;
+    const stamp =
+      hoursAgo !== undefined
+        ? iso(new Date(now - hoursAgo * 3_600_000))
+        : `2026-09-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:00:00Z`;
+    rows.push({
+      id,
+      user_id: MOCK_ACCOUNTS[author].id,
+      space_id: SHARED_SPACE,
+      source,
+      ...fields,
+      created_at: stamp,
+      updated_at: stamp,
     });
   });
   return rows;
 }
 
+function build(): MockMemoryStore {
+  const rows = seed();
+  const store = new MockMemoryStore(rows, [
+    ...MOCK_ACCOUNTS.map((account) => ({
+      id: PERSONAL_SPACE[account.id],
+      kind: "personal" as const,
+      members: [account.id],
+    })),
+    { id: SHARED_SPACE, kind: "shared" as const, name: "Boringcontext", members: MOCK_ACCOUNTS.map((a) => a.id) },
+  ], {
+    emailOf: (id) => MOCK_ACCOUNTS.find((a) => a.id === id)?.email ?? null,
+    idOfEmail: (email) => MOCK_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase())?.id ?? null,
+  });
+
+  // History on two team rows, written by different people, so "who" has something to show.
+  const deadline = rows.find((r) => r.space_id === SHARED_SPACE && r.title === "Integration v1.2");
+  if (deadline) {
+    deadline.updated_at = "2026-09-25T08:30:00Z";
+    store.seedVersion({
+      version_number: 1,
+      memory_id: deadline.id,
+      space_id: SHARED_SPACE,
+      changed_by: MOCK_ACCOUNTS[2].id,
+      event: "update",
+      project: deadline.project,
+      category: deadline.category,
+      title_before: deadline.title,
+      title_after: deadline.title,
+      content_before: "Alla tre delar ska vara ihopkopplade fredag 2 oktober.",
+      content_after: "Alla tre delar ska vara ihopkopplade måndag 5 oktober.",
+      source: deadline.source ?? null,
+      created_at: "2026-09-23T10:00:00Z",
+    });
+    store.seedVersion({
+      version_number: 2,
+      memory_id: deadline.id,
+      space_id: SHARED_SPACE,
+      changed_by: MOCK_ACCOUNTS[0].id,
+      event: "update",
+      project: deadline.project,
+      category: deadline.category,
+      title_before: deadline.title,
+      title_after: deadline.title,
+      content_before: "Alla tre delar ska vara ihopkopplade måndag 5 oktober.",
+      content_after: deadline.content,
+      source: deadline.source ?? null,
+      created_at: "2026-09-25T08:30:00Z",
+    });
+  }
+  const brain = rows.find((r) => r.space_id === SHARED_SPACE && r.title === "Brain model");
+  if (brain) {
+    brain.updated_at = "2026-09-26T12:00:00Z";
+    store.seedVersion({
+      version_number: 1,
+      memory_id: brain.id,
+      space_id: SHARED_SPACE,
+      changed_by: MOCK_ACCOUNTS[1].id,
+      event: "update",
+      project: brain.project,
+      category: brain.category,
+      title_before: brain.title,
+      title_after: brain.title,
+      content_before: "Claude Opus for extraction, Sonnet for retrieval.",
+      content_after: brain.content,
+      source: "brain",
+      created_at: "2026-09-26T12:00:00Z",
+    });
+  }
+  return store;
+}
+
 declare global {
-  var __dashboardMockStore: MockMemoryStore | undefined;
+  var __dashboardMockStoreV12: MockMemoryStore | undefined;
 }
 
 // globalThis so Next dev hot reload does not hand out a fresh empty database.
 export const mockDb: MockMemoryStore =
-  globalThis.__dashboardMockStore ?? (globalThis.__dashboardMockStore = new MockMemoryStore(seed()));
+  globalThis.__dashboardMockStoreV12 ?? (globalThis.__dashboardMockStoreV12 = build());

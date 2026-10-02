@@ -30,8 +30,8 @@ def validate_memory_input(memory: dict) -> dict:
     content = str(memory.get("content") or "").strip()
     category = str(memory.get("category") or "").strip()
 
-    if len(project) < 1 or len(project) > 100:
-        return fail("INVALID_PROJECT", "project måste vara 1–100 tecken.")
+    if len(project) > 100:
+        return fail("INVALID_PROJECT", "project måste vara högst 100 tecken.")
     if len(title) < 1 or len(title) > 150:
         return fail("INVALID_TITLE", "title måste vara 1–150 tecken.")
     if len(content) < 1 or len(content) > 10_000:

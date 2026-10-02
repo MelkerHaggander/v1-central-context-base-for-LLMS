@@ -23,7 +23,7 @@ export function ConnectView({ url }: { url: string }) {
       {(user) => (
         <>
           <TopBar email={user.email} />
-          <main className="thin-scroll mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6">
+          <main className="rise thin-scroll mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6">
             <h1 className="text-xl font-semibold tracking-tight">
               Connect Claude, ChatGPT, Grok or Kimi
             </h1>

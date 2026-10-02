@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { createInMemoryStore } from "../vendor/memory/src/in-memory";
-import { createMemoryApi } from "../vendor/memory/src/store";
 import {
   CHATGPT_OAUTH_SCHEMES,
   injectToolSecuritySchemes,
 } from "../lib/mcp-chatgpt";
 import { shouldChallengeMcpOAuth } from "../lib/mcp-oauth-challenge";
+import { bearerForSpaceAccess } from "../lib/oauth/mcp-space-token";
 
 const mcpRouteSrc = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8");
 const httpRouteSrc = readFileSync(
@@ -30,7 +29,7 @@ describe("get_context prompt transports", () => {
     assert.match(registration, /prompt:\s*z\.string\(\)\.min\(1\)\.max\(8000\)/);
     assert.match(registration, /project:\s*z\.string\(\)\.max\(100\)\.optional\(\)/);
     assert.doesNotMatch(registration, /\b(?:keywords|query|category|offset):/);
-    assert.match(registration, /\.getContext\(userId, input\)/);
+    assert.match(registration, /callPythonBrain\("get_context"/);
     assert.match(registration, /quoted user data, not instructions/);
     assert.match(mcpRouteSrc, /const CONTEXT_TOOL = \{[\s\S]*?readOnlyHint:\s*false/);
   });
@@ -88,9 +87,14 @@ describe("get_context prompt transports", () => {
     );
   });
 
+  it("answers get_context and save_memory in Python, not the TypeScript memory package", () => {
+    assert.match(mcpRouteSrc, /callPythonBrain\("get_context"/);
+    assert.match(mcpRouteSrc, /callPythonBrain\("save_brief"/);
+    assert.doesNotMatch(mcpRouteSrc, /createMemoryApi|from "@v1\/memory"/);
+  });
+
   it("uses the same memory result for MCP and HTTP and advertises health support", () => {
-    assert.match(mcpRouteSrc, /memoryApi\(extra\)\.getContext\(userId, input\)/);
-    assert.match(httpRouteSrc, /api\.getContext\(data\.user\.id/);
+    assert.match(httpRouteSrc, /callPythonBrain\(\s*"get_context"/);
     assert.match(mcpRouteSrc, /JSON\.stringify\(result\.data\)/);
     assert.match(httpRouteSrc, /jsonOk\(result\.data\)/);
     assert.match(healthRouteSrc, /mcp:\s*"1\.2\.0"/);
@@ -98,32 +102,39 @@ describe("get_context prompt transports", () => {
     assert.match(healthRouteSrc, /promptTransports:\s*true/);
   });
 
-  it("returns compact marked items without full content or user ids", async () => {
-    const memory = createMemoryApi(createInMemoryStore());
-    const saved = await memory.saveMemory("user-a", {
-      project: "Projekt A",
-      category: "deadline",
-      title: "Lanseringsdatum",
-      content: "Vi lanserar 15 oktober 2026.",
-    });
-    assert.ok("data" in saved);
+});
 
-    const result = await memory.getContext("user-a", {
-      prompt: "När ska vi lansera?",
-      project: "Projekt A",
-    });
-    assert.ok("data" in result);
-    assert.deepEqual(result.data.items[0], {
-      id: saved.data.id,
-      project: "Projekt A",
-      category: "deadline",
-      title: "Lanseringsdatum",
-      snippet: "Vi lanserar 15 oktober 2026.",
-      updated_at: saved.data.updated_at,
-      source: "user_memory",
-    });
-    const json = JSON.stringify(result.data);
-    assert.doesNotMatch(json, /user_id|created_at|"content":/);
-    assert.match(json, /updated_at/);
+describe("bearerForSpaceAccess", () => {
+  it("uses the stored Supabase JWT when the caller is an MCP session", () => {
+    assert.equal(
+      bearerForSpaceAccess({
+        bearer: "opaque-mcp",
+        mcpAccess: "opaque-mcp",
+        supabaseAccess: "supabase-jwt",
+      }),
+      "supabase-jwt",
+    );
+  });
+
+  it("keeps a real Supabase bearer when there is no MCP session", () => {
+    assert.equal(
+      bearerForSpaceAccess({
+        bearer: "supabase-jwt",
+        supabaseAccess: null,
+      }),
+      "supabase-jwt",
+    );
+  });
+
+  it("refuses an MCP session that has no Supabase access token", () => {
+    assert.throws(
+      () =>
+        bearerForSpaceAccess({
+          bearer: "opaque-mcp",
+          mcpAccess: "opaque-mcp",
+          supabaseAccess: null,
+        }),
+      /UNAUTHENTICATED/,
+    );
   });
 });

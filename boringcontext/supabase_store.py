@@ -1,13 +1,14 @@
 from typing import Any
 
 from boringcontext.clock import to_iso
+from boringcontext.store import deletion_retention_cutoff
 
 MEMORY_COLUMNS = "id, project, category, title, content, created_at, updated_at"
 VERSION_COLUMNS = (
     "version_number, memory_id, space_id, changed_by, event, project, category, "
     "title_before, title_after, content_before, content_after, source, created_at"
 )
-MEMORY_WITH_META = f"{MEMORY_COLUMNS}, space_id, source"
+MEMORY_WITH_META = f"{MEMORY_COLUMNS}, space_id, source, user_id"
 
 # PostgREST rejects a JSON array cast onto vector(3072). The pgvector text
 # literal is what the column accepts, including under the halfvec index.
@@ -42,7 +43,11 @@ def _as_memory(row: dict) -> dict:
 
 def _as_listed(row: dict) -> dict:
     source = row.get("source") if row.get("source") in ("dashboard", "brain") else None
-    return {**_as_memory(row), "source": source}
+    listed = {**_as_memory(row), "source": source}
+    created_by = row.get("user_id")
+    if isinstance(created_by, str) and created_by:
+        listed["created_by"] = created_by
+    return listed
 
 
 def _as_version(row: dict) -> dict:
@@ -131,15 +136,33 @@ class SupabaseStore:
         )
         if unchanged:
             return {"kind": "updated", "row": current}
-        if current["title"] != fields["title"] or current["content"] != fields["content"]:
-            versioned = await self._insert_version(
-                raw,
-                {"title": fields["title"], "content": fields["content"]},
-                user_id,
-                "update",
+        space_id = raw.get("space_id")
+        if space_id:
+            clash = await (
+                self.client.table("memories")
+                .select("id")
+                .eq("space_id", space_id)
+                .eq("project", fields["project"])
+                .eq("title", fields["title"])
+                .neq("id", memory_id)
+                .maybe_single()
             )
-            if versioned["error"]:
+            if clash["error"]:
                 return {"kind": "failed", "code": "UPDATE_FAILED", "message": "Kunde inte uppdatera minnet."}
+            if clash["data"]:
+                return {
+                    "kind": "failed",
+                    "code": "DUPLICATE_TITLE",
+                    "message": "A memory with that title already exists in this project.",
+                }
+        versioned = await self._insert_version(
+            raw,
+            {"title": fields["title"], "content": fields["content"]},
+            user_id,
+            "update",
+        )
+        if versioned["error"]:
+            return {"kind": "failed", "code": "UPDATE_FAILED", "message": "Kunde inte uppdatera minnet."}
         result = await self.client.table("memories").update(fields).eq("id", memory_id).select(MEMORY_COLUMNS).maybe_single()
         if result["error"]:
             return {"kind": "failed", "code": "UPDATE_FAILED", "message": "Kunde inte uppdatera minnet."}
@@ -270,6 +293,22 @@ class SupabaseStore:
             if updated["error"] or not updated["data"]:
                 return {"kind": "failed", "code": "SAVE_FAILED", "message": "Kunde inte spara minnet."}
             return {"kind": "updated", "row": _as_memory(updated["data"])}
+        same_title = await (
+            self.client.table("memories")
+            .select("id")
+            .eq("space_id", fields["space_id"])
+            .eq("project", fields["project"])
+            .eq("title", fields["title"])
+            .maybe_single()
+        )
+        if same_title["error"]:
+            return {"kind": "failed", "code": "SAVE_FAILED", "message": "Kunde inte spara minnet."}
+        if same_title["data"]:
+            return {
+                "kind": "failed",
+                "code": "DUPLICATE_TITLE",
+                "message": "A memory with that title already exists in this project.",
+            }
         inserted = await (
             self.client.table("memories")
             .insert(
@@ -288,9 +327,18 @@ class SupabaseStore:
         )
         error = inserted["error"]
         code = error.get("code") if isinstance(error, dict) else None
-        if code == "23505" or error or not inserted["data"]:
+        if code == "23505":
+            return {
+                "kind": "failed",
+                "code": "DUPLICATE_TITLE",
+                "message": "A memory with that title already exists in this project.",
+            }
+        if error or not inserted["data"]:
             return {"kind": "failed", "code": "SAVE_FAILED", "message": "Kunde inte spara minnet."}
-        return {"kind": "created", "row": _as_memory(inserted["data"])}
+        created = _as_memory(inserted["data"])
+        created["source"] = fields["source"]
+        created["created_by"] = user_id
+        return {"kind": "created", "row": created}
 
     async def set_embedding(self, memory_id: str, embedding: list[float] | None) -> None:
         if not embedding:
@@ -308,6 +356,20 @@ class SupabaseStore:
             raise RuntimeError(result["error"].get("message", "select failed"))
         embedding = (result["data"] or {}).get("embedding") if result["data"] else None
         return _embedding_present(embedding)
+
+    async def list_deletions(self, space_id: str) -> list[dict]:
+        # The SQL cutoff only shrinks the transfer. keep_recent_deletions is the rule.
+        result = await (
+            self.client.table("memory_versions")
+            .select(VERSION_COLUMNS)
+            .eq("space_id", space_id)
+            .eq("event", "delete")
+            .gte("created_at", deletion_retention_cutoff())
+            .order("created_at", ascending=False)
+        )
+        if result["error"]:
+            raise RuntimeError(result["error"].get("message", "select failed"))
+        return [_as_version(row) for row in result["data"] or []]
 
     async def list_versions(self, memory_id: str) -> list[dict]:
         result = await (

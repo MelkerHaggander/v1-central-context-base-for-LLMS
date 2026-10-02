@@ -64,6 +64,8 @@ export function countByCategory(memories: readonly Memory[]): CategoryCount[] {
 export function summariseProjects(memories: readonly Memory[]): ProjectSummary[] {
   const grouped = new Map<string, Memory[]>();
   for (const m of memories) {
+    // Empty project = free-standing memory, not a project in the Projects tab.
+    if (!m.project.trim()) continue;
     const rows = grouped.get(m.project);
     if (rows) rows.push(m);
     else grouped.set(m.project, [m]);
@@ -99,6 +101,14 @@ export function summarise(memories: readonly Memory[], complete: boolean): Total
     projects_: projects,
     newest,
   };
+}
+
+/**
+ * Tab badge: real projects (have memories) plus empty drafts the reader created.
+ * Drafts are local until their first memory lands on the server.
+ */
+export function countProjects(realCount: number, draftCount: number): number {
+  return Math.max(0, realCount) + Math.max(0, draftCount);
 }
 
 /** Local filtering for the panel. The API already filtered; this is the in-view slice. */

@@ -11,7 +11,7 @@
 
 ## 2. Varför den tidigare PKCE-kontrollen kunde kringgås
 
-PKCE-jämförelsen fanns i `apps/api/app/oauth/token/route.ts` **efter** RPC-anropet. Next.js-servern kunde därför bara neka ett redan förbrukat byte. En klient som hoppade över `/oauth/token` och anropade PostgREST direkt fick tokens utan `code_verifier`. Senare migrationer (`20260918120000`, `20260918153000`) låste sessions-RPC:er, inte den här funktionen. I live-projektet `uthkzkvpkkpzrmzjunqq` hade `anon`, `authenticated` och `service_role` fortfarande `EXECUTE` på `oauth_consume_code`.
+PKCE-jämförelsen fanns i `apps/api/app/oauth/token/route.ts` **efter** RPC-anropet. Next.js-servern kunde därför bara neka ett redan förbrukat byte. En klient som hoppade över `/oauth/token` och anropade PostgREST direkt fick tokens utan `code_verifier`. Senare migrationer (`20260918120000`, `20260918153000`) låste sessions-RPC:er, inte den här funktionen. I live-projektet `your-project-ref` hade `anon`, `authenticated` och `service_role` fortfarande `EXECUTE` på `oauth_consume_code`.
 
 ## 3. Hotmodell
 
@@ -65,7 +65,7 @@ Saknas service-role-nyckeln kastar `createSupabaseAdminClient` `Missing SUPABASE
 
 ## 8. Hur migrationen appliceras
 
-Ändra inte gamla migrationer. Kör den nya SQL-filen mot projektet `uthkzkvpkkpzrmzjunqq` (SQL Editor eller `supabase db push` från denna gren).
+Ändra inte gamla migrationer. Kör den nya SQL-filen mot projektet `your-project-ref` (SQL Editor eller `supabase db push` från denna gren).
 
 Ordning: **SQL först, sedan deploy av `apps/api` till `integration/v1.1`.** SQL stänger hålet direkt. Gammal API-kod som fortfarande anropar `oauth_consume_code` slutar fungera tills den nya koden är ute. Gör de två stegen i samma fönster.
 
@@ -111,5 +111,5 @@ Hellre: lämna SQL på plats och rulla bara API om den nya koden har en bugg, s�
 - Authorization code i redirect-URL kan fortfarande läcka. PKCE skyddar mot den som inte har verifiern.
 - `oauth_save_code` och `oauth_get_client` är oförändrade.
 - Sessions-RPC `oauth_get_session` / `oauth_reuse_session` är fortfarande anropbara med anon-nyckel plus opaque MCP-token (tidigare beslut så Connect inte krävde service_role för befintliga sessioner).
-- Hårdkodad anon-fallback i `env.ts` är orörd.
+- Reservnyckeln i `env.ts` är borttagen. Den publika nyckeln läses bara från miljön.
 - Utan `SUPABASE_SERVICE_ROLE_KEY` på just den Vercel-deploy som serverar `/oauth/token` slutar nya Connect-byten. Redan anslutna sessioner påverkas inte.

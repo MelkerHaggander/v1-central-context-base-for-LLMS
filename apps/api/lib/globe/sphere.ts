@@ -37,10 +37,17 @@ export type GlobeLayout = {
   points: GlobePoint[];
 };
 
-/** Widest a zone may get, so two neighbouring projects never merge visually. */
-const MAX_ZONE_RADIUS = 0.62;
-/** Narrowest, so a one-memory project is still a visible dot and not a pinprick. */
-const MIN_ZONE_FACTOR = 0.4;
+/**
+ * Widest a zone may get. v1.2: raised from 0.62 (about 35 degrees), which left
+ * most of the sphere empty with three to five projects. Zones still stop short
+ * of each other: see ZONE_SHARE.
+ */
+const MAX_ZONE_RADIUS = 1.15;
+/** Share of the gap to the nearest neighbour a zone may use. Two zones at 0.46
+ *  each leave 8% of the gap empty, so they never touch. v1.1 used 0.42. */
+const ZONE_SHARE = 0.46;
+/** Narrowest, so a small project is a visible patch and not a pinprick. */
+const MIN_ZONE_FACTOR = 0.6;
 
 /** FNV-1a. Small, fast, and identical in every JS engine. */
 export function hash32(input: string): number {
@@ -148,7 +155,7 @@ export function buildClusters(counts: Map<string, number>): Cluster[] {
   const ceiling =
     projects.length <= 1
       ? Math.PI
-      : Math.min(MAX_ZONE_RADIUS, 0.42 * minCentreSeparation(centers));
+      : Math.min(MAX_ZONE_RADIUS, ZONE_SHARE * minCentreSeparation(centers));
 
   const busiest = Math.max(1, ...projects.map((p) => counts.get(p) ?? 0));
 

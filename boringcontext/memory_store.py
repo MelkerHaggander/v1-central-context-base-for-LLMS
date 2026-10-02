@@ -124,14 +124,14 @@ class InMemoryStore:
             return {"kind": "updated", "row": self._client(row)}
         timestamp = to_iso(self._now())
         text_changed = row["title"] != fields["title"] or row["content"] != fields["content"]
-        if text_changed:
-            self._write_version(
-                row,
-                timestamp,
-                changed_by,
-                "update",
-                {"title": fields["title"], "content": fields["content"]},
-            )
+        # Every field change is a version. The row still holds the values before the change.
+        self._write_version(
+            row,
+            timestamp,
+            changed_by,
+            "update",
+            {"title": fields["title"], "content": fields["content"]},
+        )
         row["project"] = fields["project"]
         row["category"] = fields["category"]
         row["title"] = fields["title"]
@@ -149,10 +149,27 @@ class InMemoryStore:
             return {"kind": "failed", "code": "UPDATE_FAILED", "message": "Kunde inte uppdatera minnet."}
         return self._apply_update(row, fields, user_id)
 
+    def _title_taken(self, space_id: str | None, project: str, title: str, except_id: str | None = None) -> bool:
+        if not space_id:
+            return False
+        return any(
+            candidate["space_id"] == space_id
+            and candidate["project"] == project
+            and candidate["title"] == title
+            and candidate["id"] != except_id
+            for candidate in self._rows
+        )
+
     async def update_by_id(self, memory_id: str, fields: dict, changed_by: str) -> dict:
         row = self._find(memory_id)
         if row is None:
             return {"kind": "missing"}
+        if self._title_taken(row["space_id"], fields["project"], fields["title"], memory_id):
+            return {
+                "kind": "failed",
+                "code": "DUPLICATE_TITLE",
+                "message": "A memory with that title already exists in this project.",
+            }
         for candidate in self._rows:
             if candidate["id"] == memory_id:
                 continue
@@ -193,7 +210,7 @@ class InMemoryStore:
         listed = []
         for row in self._rows:
             if row["space_id"] is not None and row["space_id"] in allowed:
-                listed.append({**self._client(row), "source": row["source"]})
+                listed.append({**self._client(row), "source": row["source"], "created_by": row["user_id"]})
         return listed
 
     async def list_nearest(self, _user_id: str, embedding: list[float], space_ids: list[str], limit: int) -> list[dict]:
@@ -272,6 +289,12 @@ class InMemoryStore:
             existing["updated_at"] = timestamp
             existing["embedding"] = None
             return {"kind": "updated", "row": self._client(existing)}
+        if self._title_taken(fields["space_id"], fields["project"], fields["title"]):
+            return {
+                "kind": "failed",
+                "code": "DUPLICATE_TITLE",
+                "message": "A memory with that title already exists in this project.",
+            }
         timestamp = to_iso(self._now())
         row = {
             "id": self._new_id(),
@@ -298,6 +321,15 @@ class InMemoryStore:
     async def has_embedding(self, memory_id: str) -> bool:
         row = self._find(memory_id)
         return bool(row and row["embedding"])
+
+    async def list_deletions(self, space_id: str) -> list[dict]:
+        rows = [
+            self._public_version(version)
+            for version in self._versions
+            if version["event"] == "delete" and version.get("space_id") == space_id
+        ]
+        rows.sort(key=lambda version: version["created_at"], reverse=True)
+        return rows
 
     async def list_versions(self, memory_id: str) -> list[dict] | None:
         history = self._history(memory_id)

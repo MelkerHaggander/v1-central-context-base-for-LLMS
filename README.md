@@ -11,7 +11,7 @@ Private memory for a language model. The model calls two MCP tools. The server d
 
 There is no MCP delete. The dashboard deletes. HTTP routes for update, lesson, and search remain; they are not MCP tools.
 
-A note is personal unless the text explicitly asks for shared. Direct vector hits use similarity `0.35`. A neighbor of a direct hit uses `0.55`. If the embedding is missing or the embed call fails, retrieval stays on the lexical ranking.
+A note is personal unless the text asks to save it to the team. One team is enough. Several teams stay personal unless the text names one of them. Direct vector hits use similarity `0.35`. A neighbor of a direct hit uses `0.55`. If the embedding is missing or the embed call fails, retrieval stays on the lexical ranking.
 
 Fields, lengths, and error codes are in [docs/contracts.md](docs/contracts.md).
 
@@ -34,6 +34,16 @@ pytest
 
 The tests stay offline.
 
-## Dashboard
+## Dashboard, login, and chat connections
 
-The globe and the rest of the interface stay in `apps/api` and `apps/dashboard`. That UI is React and a client-side canvas. Rewriting it in Python would change how it looks and how it moves, so it is unchanged. `npm` scripts in those apps are the way to open it. The Python package is the memory brain and the HTTP API with the same JSON.
+The globe, the dashboard, login, and the OAuth pages that Claude, ChatGPT, and Grok use stay in `apps/api`. That UI is React and a client-side canvas, the same screens as v1.2. `npm` scripts in `apps/api` open it.
+
+The brain is the `boringcontext` package. `get_context`, `save_memory`, dashboard create, update and delete, and the HTTP routes for the four fields call `python -m boringcontext.invoke`. Python does the ranking, the team-or-personal choice, same-subject updates, and the before/after history. Spaces and members stay in the Next routes so the screens stay the same.
+
+Set `SUPABASE_URL` and an anon or publishable key in the environment of both processes. Set `NEXT_PUBLIC_APP_URL` to the host you serve. Do not point those variables at someone else's project. Do not commit keys.
+
+```bash
+cd apps/api
+npm install
+npm run dev
+```

@@ -17,8 +17,11 @@ import httpx
 from fastapi import FastAPI, Request
 
 from boringcontext.api import create_app
+from boringcontext.clients import create_embedding_client, create_formulator_client
+from boringcontext.mcp_store import McpRpcStore
 from boringcontext.memory_store import InMemoryStore
 from boringcontext.postgrest import PostgrestClient, access_token
+from boringcontext.store import create_memory_api
 from boringcontext.supabase_store import SupabaseStore
 
 _URL_NAMES = ("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL")
@@ -83,15 +86,33 @@ class SupabaseSpaces:
             raise RuntimeError(result["error"].get("message") or "space lookup failed")
         return [row["space_id"] for row in result["data"] or [] if row.get("space_id")]
 
-    async def space_for(self, user_id: str, kind: str) -> str | None:
+    async def list_spaces(self, user_id: str) -> list[dict]:
         ids = await self.readable_space_ids(user_id)
         if not ids:
-            return None
-        spaces = await self.client.table("spaces").select("id, kind").in_("id", ids)
+            return []
+        spaces = await self.client.table("spaces").select("id, kind, name").in_("id", ids)
+        if spaces["error"]:
+            spaces = await self.client.table("spaces").select("id, kind").in_("id", ids)
         if spaces["error"]:
             raise RuntimeError(spaces["error"].get("message") or "space lookup failed")
-        match = next((row for row in spaces["data"] or [] if row.get("kind") == kind), None)
-        return match["id"] if match else None
+        listed = []
+        for row in spaces["data"] or []:
+            kind = row.get("kind")
+            if kind not in ("personal", "shared") or not row.get("id"):
+                continue
+            item = {"id": row["id"], "kind": kind}
+            name = row.get("name")
+            if isinstance(name, str) and name.strip():
+                item["name"] = name.strip()
+            listed.append(item)
+        return listed
+
+    async def space_for(self, user_id: str, kind: str) -> str | None:
+        spaces = await self.list_spaces(user_id)
+        matches = [row for row in spaces if row["kind"] == kind]
+        if kind == "shared" and len(matches) != 1:
+            return None
+        return matches[0]["id"] if matches else None
 
     async def is_member(self, user_id: str, space_id: str) -> bool:
         result = await (
@@ -236,7 +257,12 @@ def create_runtime_app(
     client = PostgrestClient(url, key, transport=transport)
     spaces = SupabaseSpaces(client)
     store = PersonalSpaceStore(SupabaseStore(client), spaces)
-    app = create_app(store=store, spaces=spaces)
+    app = create_app(
+        store=store,
+        spaces=spaces,
+        embedding=create_embedding_client(env, transport),
+        formulator=create_formulator_client(env, transport),
+    )
     resolver = SessionResolver(url, key, transport=transport)
 
     @app.middleware("http")
@@ -256,3 +282,148 @@ def create_runtime_app(
             access_token.reset(reset)
 
     return app
+
+
+def _jwt_bearer(bearer: str) -> bool:
+    return bearer.count(".") == 2 and bearer.startswith("eyJ")
+
+
+def _fields(body: dict) -> dict:
+    return {
+        "project": str(body.get("project") or ""),
+        "category": str(body.get("category") or ""),
+        "title": str(body.get("title") or ""),
+        "content": str(body.get("content") or ""),
+    }
+
+
+def _js_number(value: Any) -> float:
+    if isinstance(value, bool):
+        return float("nan")
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return float("nan")
+    return float("nan")
+
+
+def _offset(value: Any) -> float:
+    if value is None or value == "":
+        return 0.0
+    return _js_number(value)
+
+
+def _search(body: dict) -> dict:
+    return {
+        "project": None if body.get("project") is None else str(body.get("project")),
+        "category": None if body.get("category") is None else str(body.get("category")),
+        "query": None if body.get("query") is None else str(body.get("query")),
+        "offset": _offset(body.get("offset")),
+    }
+
+
+async def dispatch_brain(api: Any, op: str, user_id: str, payload: dict) -> dict:
+    """MCP and the dashboard share one dispatch so the thresholds cannot drift."""
+    if op == "get_context":
+        context = {"prompt": payload["prompt"] if isinstance(payload.get("prompt"), str) else ""}
+        if isinstance(payload.get("project"), str):
+            context["project"] = payload["project"]
+        return await api.get_context(user_id, context)
+    if op == "save_brief":
+        return await api.save_brief(user_id, payload)
+    if op == "save_memory":
+        return await api.save_memory(user_id, _fields(payload))
+    if op == "save_lesson":
+        # The caller may send a category. lesson_memory always stores lesson.
+        return await api.save_lesson(
+            user_id,
+            {
+                "project": str(payload.get("project") or ""),
+                "title": str(payload.get("title") or ""),
+                "content": str(payload.get("content") or ""),
+            },
+        )
+    if op == "update_memory":
+        return await api.update_memory(
+            user_id,
+            {
+                **_fields(payload),
+                "id": str(payload.get("id") or ""),
+                "allow_project_change": payload.get("allow_project_change") is True,
+            },
+        )
+    if op == "search_memory":
+        return await api.search_memory(user_id, _search(payload))
+    if op == "save_dashboard":
+        space_id = str(payload.get("space_id") or "").strip()
+        if not space_id:
+            return {"error": {"code": "INVALID_SPACE", "message": "space_id krävs."}}
+        return await api.save_dashboard_memory(user_id, _fields(payload), space_id)
+    if op == "delete_memory":
+        return await api.delete_memory(user_id, str(payload.get("id") or ""))
+    if op == "search_in_space":
+        space_id = str(payload.get("space_id") or "").strip()
+        if not space_id:
+            return {"error": {"code": "INVALID_SPACE", "message": "space_id krävs."}}
+        return await api.search_in_space(user_id, space_id, _search(payload))
+    if op == "list_versions":
+        return await api.list_versions(user_id, str(payload.get("id") or ""))
+    if op == "list_deletions":
+        space_id = str(payload.get("space_id") or "").strip()
+        if not space_id:
+            return {"error": {"code": "INVALID_SPACE", "message": "space_id krävs."}}
+        return await api.list_deletions(user_id, space_id)
+    return {"error": {"code": "INVALID_BODY", "message": "Okänd operation."}}
+
+
+async def run_brain_call(
+    op: str,
+    user_id: str,
+    payload: dict,
+    bearer: str,
+    env: dict[str, str | None] | None = None,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> dict:
+    """Run one memory operation. Ranking and formulation stay in this package."""
+    embedding = create_embedding_client(env, transport)
+    formulator = create_formulator_client(env, transport)
+    config = supabase_config(env)
+    if config is None:
+        api = create_memory_api(InMemoryStore(), type("Brain", (), {"spaces": None, "embedding": embedding, "formulator": formulator})())
+        return await dispatch_brain(api, op, user_id, payload)
+
+    url, key = config
+    client = PostgrestClient(url, key, transport=transport)
+    spaces = SupabaseSpaces(client)
+    resolver = SessionResolver(url, key, transport=transport)
+    space_token: str | None = None
+    if _jwt_bearer(bearer):
+        resolved_user = await resolver.user_id_for(bearer)
+        if not resolved_user:
+            return {"error": {"code": "UNAUTHENTICATED", "message": "Inte inloggad."}}
+        user_id = resolved_user
+        space_token = bearer
+        store: Any = PersonalSpaceStore(SupabaseStore(client), spaces)
+    else:
+        session = await resolver.mcp_session(bearer) if bearer else None
+        if session is None:
+            return {"error": {"code": "UNAUTHENTICATED", "message": "Inte inloggad."}}
+        user_id = session["user_id"]
+        space_token = session["supabase_access"]
+        if not await resolver.user_id_for(space_token):
+            refreshed = await resolver.refresh(session["supabase_refresh"])
+            if refreshed:
+                space_token = refreshed[1]
+        store = McpRpcStore(client, bearer)
+
+    brain = type("Brain", (), {"spaces": spaces, "embedding": embedding, "formulator": formulator})()
+    api = create_memory_api(store, brain)
+    marker = access_token.set(space_token)
+    try:
+        return await dispatch_brain(api, op, user_id, payload)
+    finally:
+        access_token.reset(marker)

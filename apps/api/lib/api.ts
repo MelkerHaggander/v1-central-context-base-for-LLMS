@@ -11,10 +11,15 @@ import { memoryBelongsToTab, USER_ID_HEADER } from "./tab-session";
 import type {
   ApiError,
   LoginResponse,
+  Member,
+  MembersResponse,
   LogoutResponse,
   Memory,
+  MemoryVersion,
   SearchInput,
   SessionResponse,
+  Space,
+  SpacesResponse,
 } from "./types";
 import { PAGE_SIZE, isApiError } from "./types";
 
@@ -28,6 +33,21 @@ const ACCOUNT_SWITCHED: ApiError = {
 const NETWORK_ERROR: ApiError = {
   error: { code: "NETWORK_ERROR", message: "Could not reach the server. Check the connection." },
 };
+
+/**
+ * A body that is not JSON. A 404 or 405 without JSON is the framework's own
+ * page for a route that does not exist. The mock/proxy in apps/dashboard turns
+ * that into UPSTREAM_NO_ROUTE, but apps/api has no proxy, so the client names
+ * it here: a missing endpoint, not a broken server.
+ */
+export function unreadableBody(status: number): ApiError {
+  if (status === 404 || status === 405) {
+    return { error: { code: "NO_ROUTE", message: `The server has no such endpoint (${status}).` } };
+  }
+  return {
+    error: { code: "INVALID_RESPONSE", message: `The server answered ${status} without valid JSON.` },
+  };
+}
 
 async function request<T>(input: string, init?: RequestInit): Promise<T | ApiError> {
   let response: Response;
@@ -46,12 +66,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T | ApiErr
   try {
     body = await response.json();
   } catch {
-    return {
-      error: {
-        code: "INVALID_RESPONSE",
-        message: `The server answered ${response.status} without valid JSON.`,
-      },
-    };
+    return unreadableBody(response.status);
   }
 
   if (isApiError(body)) return body;
@@ -81,6 +96,7 @@ export function session() {
 
 export async function searchMemories(params: SearchInput & { expectedUserId?: string }) {
   const search = new URLSearchParams();
+  if (params.space_id) search.set("space_id", params.space_id);
   if (params.project) search.set("project", params.project);
   if (params.category) search.set("category", params.category);
   if (params.query) search.set("query", params.query);
@@ -103,12 +119,7 @@ export async function searchMemories(params: SearchInput & { expectedUserId?: st
   try {
     body = await response.json();
   } catch {
-    return {
-      error: {
-        code: "INVALID_RESPONSE",
-        message: `The server answered ${response.status} without valid JSON.`,
-      },
-    };
+    return unreadableBody(response.status);
   }
 
   if (isApiError(body)) return body;
@@ -139,6 +150,7 @@ export type MemoryFields = {
   category: string;
   title: string;
   content: string;
+  space_id?: string;
 };
 
 async function writeRequest<T>(
@@ -162,12 +174,7 @@ async function writeRequest<T>(
   try {
     body = await response.json();
   } catch {
-    return {
-      error: {
-        code: "INVALID_RESPONSE",
-        message: `Server answered ${response.status} without valid JSON.`,
-      },
-    };
+    return unreadableBody(response.status);
   }
 
   if (isApiError(body)) return body;
@@ -217,8 +224,8 @@ export function updateMemory(
 }
 
 /**
- * Deleting cannot be undone and there is no history. The confirm step lives in
- * the view, not here.
+ * The server has no undo. The view holds deletes back for a few seconds
+ * (lib/delete-queue.ts) and asks for confirmation; this only sends the request.
  *
  * The two docs that describe this endpoint disagree on the wrapper: filip-auth.md
  * and the handover page say `{ "success": true }`, while logout uses
@@ -244,6 +251,24 @@ export async function deleteMemory(id: string, expectedUserId?: string) {
   return { success: true as const };
 }
 
+/**
+ * The tab is closing and a delete is still waiting for its undo window to
+ * end. Sent with keepalive so it survives the page going away. Nothing reads
+ * the answer: if it fails, the memory is simply still there next time, which
+ * is the safe way to fail.
+ */
+export function deleteMemoryOnUnload(id: string) {
+  try {
+    void fetch(`/api/memories/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    /* fetch threw synchronously (quota for keepalive bodies); nothing to do */
+  }
+}
+
 /** How many pages of 50 we are willing to walk for the globe and the totals. */
 export const MAX_PAGES = 20;
 
@@ -262,7 +287,7 @@ export type AllMemories = {
  * `complete: false` rather than looping forever on a huge account.
  */
 export async function fetchAllMemories(
-  params: { project?: string; category?: string; query?: string; expectedUserId?: string } = {},
+  params: { project?: string; category?: string; query?: string; space_id?: string; expectedUserId?: string } = {},
 ): Promise<AllMemories | ApiError> {
   const memories: Memory[] = [];
   const seen = new Set<string>();
@@ -285,4 +310,153 @@ export async function fetchAllMemories(
   }
 
   return { memories, complete: false, pages: MAX_PAGES };
+}
+
+/* ------------------------------------------------------------------ *
+ * v1.2: spaces and history.
+ *
+ * GET /api/spaces is Alfredo's (PR #40): { spaces: [{ id, kind }] }, personal
+ * first, derived from the session. The dashboard never sends a user id.
+ *
+ * GET /api/memories/:id/versions is Melker's (c31e656): a plain list, newest
+ * first, text only. It answers 404 once the memory itself is deleted, even
+ * though the rows stay in memory_versions, because the access check looks the
+ * space up on the live row.
+ * ------------------------------------------------------------------ */
+
+function isSpace(value: unknown): value is Space {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Space).id === "string" &&
+    ((value as Space).kind === "personal" || (value as Space).kind === "shared")
+  );
+}
+
+export async function fetchSpaces(expectedUserId?: string): Promise<Space[] | ApiError> {
+  const result = await writeRequest<SpacesResponse>("/api/spaces", { method: "GET" }, expectedUserId);
+  if (isApiError(result)) return result;
+  // Only the fields the view uses, and name only when it is real text.
+  const list = Array.isArray(result?.spaces)
+    ? result.spaces.filter(isSpace).map((s) => ({
+        id: s.id,
+        kind: s.kind,
+        ...(typeof s.name === "string" && s.name.trim() ? { name: s.name.trim() } : {}),
+      }))
+    : null;
+  if (!list) {
+    return {
+      error: { code: "INVALID_RESPONSE", message: "The server answered without a spaces list." },
+    };
+  }
+  return list;
+}
+
+export async function fetchVersions(id: string, expectedUserId?: string): Promise<MemoryVersion[] | ApiError> {
+  const result = await writeRequest<MemoryVersion[]>(
+    `/api/memories/${encodeURIComponent(id)}/versions`,
+    { method: "GET" },
+    expectedUserId,
+  );
+  if (isApiError(result)) return result;
+  if (!Array.isArray(result)) {
+    return {
+      error: { code: "INVALID_RESPONSE", message: "The server answered without a version list." },
+    };
+  }
+  return [...result].sort((a, b) => b.version_number - a.version_number);
+}
+
+/**
+ * GET /api/memories/deleted?space_id=. What was deleted in a space, with the
+ * text it had and who deleted it. Newest first. The API keeps it in
+ * memory_versions; a deleted memory is gone from the list and the globe.
+ */
+export async function fetchDeleted(spaceId: string, expectedUserId?: string): Promise<MemoryVersion[] | ApiError> {
+  const result = await writeRequest<MemoryVersion[]>(
+    `/api/memories/deleted?space_id=${encodeURIComponent(spaceId)}`,
+    { method: "GET" },
+    expectedUserId,
+  );
+  if (isApiError(result)) return result;
+  if (!Array.isArray(result)) {
+    return {
+      error: { code: "INVALID_RESPONSE", message: "The server answered without a list of deleted memories." },
+    };
+  }
+  return result
+    .filter((v) => v.event === "delete")
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+}
+
+/* ------------------------------------------------------------------ *
+ * Proposed: teams and members ("Förslag: team och medlemmar").
+ *
+ * GET /api/spaces/:id/members exists. Create, rename, add and remove do not.
+ * A missing write comes back as a 404 page. The view shows the team buttons
+ * once the members list answers.
+ * ------------------------------------------------------------------ */
+
+/**
+ * True only when the server says it has no such endpoint. A 5xx, a gateway
+ * page or a bad body is a failure and must say so, never "not built yet".
+ * UPSTREAM_NO_ROUTE comes from lib/upstream.ts (the proxy in apps/dashboard)
+ * and NO_ROUTE from unreadableBody (apps/api, no proxy), both for a non-JSON
+ * 404 or 405.
+ */
+export function isMissingEndpoint(error: ApiError["error"]): boolean {
+  return (
+    error.code === "UPSTREAM_NO_ROUTE" ||
+    error.code === "NO_ROUTE" ||
+    error.code === "HTTP_404" ||
+    error.code === "HTTP_405"
+  );
+}
+
+const json = (body: unknown): RequestInit => ({
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export function createTeam(name: string, expectedUserId?: string) {
+  return writeRequest<Space>("/api/spaces", { method: "POST", ...json({ name }) }, expectedUserId);
+}
+
+export function renameTeam(id: string, name: string, expectedUserId?: string) {
+  return writeRequest<Space>(
+    `/api/spaces/${encodeURIComponent(id)}`,
+    { method: "PATCH", ...json({ name }) },
+    expectedUserId,
+  );
+}
+
+export async function fetchMembers(id: string, expectedUserId?: string): Promise<Member[] | ApiError> {
+  const result = await writeRequest<MembersResponse>(
+    `/api/spaces/${encodeURIComponent(id)}/members`,
+    { method: "GET" },
+    expectedUserId,
+  );
+  if (isApiError(result)) return result;
+  if (!Array.isArray(result?.members)) {
+    return { error: { code: "INVALID_RESPONSE", message: "The server answered without a member list." } };
+  }
+  return result.members.filter(
+    (m): m is Member => typeof m?.user_id === "string" && typeof m?.email === "string",
+  );
+}
+
+export function addMember(id: string, email: string, expectedUserId?: string) {
+  return writeRequest<Member>(
+    `/api/spaces/${encodeURIComponent(id)}/members`,
+    { method: "POST", ...json({ email }) },
+    expectedUserId,
+  );
+}
+
+export function removeMember(id: string, userId: string, expectedUserId?: string) {
+  return writeRequest<{ success?: boolean }>(
+    `/api/spaces/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+    expectedUserId,
+  );
 }

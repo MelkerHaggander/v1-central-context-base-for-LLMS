@@ -56,9 +56,14 @@ test("session create uses the signed-in user JWT, lookups use the opaque token",
   assert.doesNotMatch(src, /createSupabaseAdminClient/);
 });
 
-test("password login updates MCP tokens with the signed-in user JWT", () => {
-  const src = readFileSync(new URL("../../app/api/auth/login/route.ts", import.meta.url), "utf8");
-  assert.match(src, /createSupabaseUserClient\(data\.session\.access_token\)\.rpc\("oauth_update_supabase_tokens_for_user"/);
-  assert.doesNotMatch(src, /createSupabaseAdminClient/);
-  assert.doesNotMatch(src, /createSupabaseAnonClient/);
+test("dashboard login and logout stay local and do not replace MCP tokens", () => {
+  const login = readFileSync(new URL("../../app/api/auth/login/route.ts", import.meta.url), "utf8");
+  const logout = readFileSync(new URL("../../app/api/auth/logout/route.ts", import.meta.url), "utf8");
+  const approve = readFileSync(new URL("../../app/oauth/approve/route.ts", import.meta.url), "utf8");
+  assert.match(login, /signOut\(\{ scope: "local" \}\)/);
+  assert.match(logout, /signOut\(\{ scope: "local" \}\)/);
+  assert.match(approve, /signOut\(\{ scope: "local" \}\)/);
+  assert.doesNotMatch(login, /oauth_update_supabase_tokens_for_user/);
+  assert.doesNotMatch(login, /createSupabaseAdminClient/);
+  assert.doesNotMatch(login, /createSupabaseAnonClient/);
 });

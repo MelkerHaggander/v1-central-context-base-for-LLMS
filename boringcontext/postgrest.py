@@ -118,6 +118,14 @@ class Query:
         self.filters.append((column, f"eq.{_literal(value)}"))
         return self
 
+    def neq(self, column: str, value: Any) -> Query:
+        self.filters.append((column, f"neq.{_literal(value)}"))
+        return self
+
+    def gte(self, column: str, value: Any) -> Query:
+        self.filters.append((column, f"gte.{_literal(value)}"))
+        return self
+
     def in_(self, column: str, values: list) -> Query:
         inner = ",".join(_literal(value) for value in values)
         self.filters.append((column, f"in.({inner})"))

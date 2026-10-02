@@ -5,13 +5,18 @@
  *
  * Colour choice is not taste. The six hues were picked with the data-viz
  * validator: every neighbouring pair in DISPLAY_ORDER clears colour-vision
- * separation (worst adjacent CVD deltaE 16.3 light / 13.2 dark, target >= 8) and
- * the normal-vision floor (19.6 / 19.3, floor 15) against both surfaces.
+ * separation (worst adjacent CVD deltaE 11.4 light / 13.2 dark, target >= 8) and
+ * the normal-vision floor (18.6 / 19.3, floor 15) against both surfaces.
  * Re-run the validator before changing a hue or the order.
  *
- * On the light surface `goal` and `deadline` fall below 3:1 contrast, so colour
- * must never be the only channel: every dot, chip and legend row also carries
- * its label in text. Keep that rule if you restyle.
+ * v1.2: the light steps are one notch darker than v1.1, because goal and
+ * deadline sat at 2.1:1 and 2.6:1 on white and the globe was hard to read in
+ * light mode. Re-checked 29 Sep for the Off-White + Charcoal and Black +
+ * Warm White themes: all six light steps clear 4:1 on the page and panel
+ * (#fafaf8, #ffffff), all six dark steps 4.5:1 (#0e0e0d, #171716), and the
+ * separation figures above hold on all four surfaces.
+ * Colour is still never the only channel: every dot, chip and legend row also
+ * carries its label in text. Keep that rule if you restyle.
  */
 import { CATEGORIES, type Category } from "./types";
 
@@ -46,12 +51,12 @@ export const CATEGORY_HINT: Record<Category, string> = {
 
 /** Light and dark steps of the same six hues, validated per surface. */
 export const CATEGORY_HEX: Record<Category, { light: string; dark: string }> = {
-  fact: { light: "#eb6834", dark: "#d95926" },
-  decision: { light: "#2a78d6", dark: "#3987e5" },
-  goal: { light: "#eda100", dark: "#c98500" },
-  deadline: { light: "#e87ba4", dark: "#d55181" },
+  fact: { light: "#d4501a", dark: "#d95926" },
+  decision: { light: "#2672cc", dark: "#3987e5" },
+  goal: { light: "#a97000", dark: "#c98500" },
+  deadline: { light: "#c54379", dark: "#d55181" },
   preference: { light: "#4a3aa7", dark: "#9085e9" },
-  lesson: { light: "#008300", dark: "#008300" },
+  lesson: { light: "#007a00", dark: "#2e9a3a" },
 };
 
 /** CSS custom property that carries the active theme's step. */

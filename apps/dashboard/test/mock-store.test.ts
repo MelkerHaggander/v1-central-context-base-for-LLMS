@@ -34,15 +34,18 @@ describe("mock-store följer contracts.md", () => {
 
   it("validerar i ordningen project, title, content, category och trimmar", () => {
     const db = new MockMemoryStore();
-    assert.equal(err(db.saveMemory(A, { ...deadline, project: "  " })), "INVALID_PROJECT");
+    // Empty project is allowed (free-standing memory). Too-long project still fails.
+    assert.equal(err(db.saveMemory(A, { ...deadline, project: "x".repeat(101) })), "INVALID_PROJECT");
     assert.equal(err(db.saveMemory(A, { ...deadline, title: "   " })), "INVALID_TITLE");
     assert.equal(err(db.saveMemory(A, { ...deadline, content: "" })), "INVALID_CONTENT");
     assert.equal(err(db.saveMemory(A, { ...deadline, category: "Deadline" })), "INVALID_CATEGORY");
-    // Flera fel -> första i ordningen
+    // Flera fel -> första kvarvarande i ordningen (title, when project is empty)
     assert.equal(
       err(db.saveMemory(A, { project: "", title: "", content: "", category: "x" })),
-      "INVALID_PROJECT",
+      "INVALID_TITLE",
     );
+    const alone = ok(db.saveMemory(A, { ...deadline, project: "  " }));
+    assert.equal(alone.project, "");
     const m = ok(db.saveMemory(A, { ...deadline, title: "  Trim  " }));
     assert.equal(m.title, "Trim");
   });
@@ -190,7 +193,7 @@ describe("mock-store följer contracts.md", () => {
   it("returns English error text for every validation failure", () => {
     const db = new MockMemoryStore();
     const cases = [
-      db.saveMemory(A, { ...deadline, project: "  " }),
+      db.saveMemory(A, { ...deadline, project: "x".repeat(101) }),
       db.saveMemory(A, { ...deadline, title: "   " }),
       db.saveMemory(A, { ...deadline, content: "" }),
       db.saveMemory(A, { ...deadline, category: "Deadline" }),

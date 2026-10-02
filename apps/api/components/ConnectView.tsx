@@ -10,6 +10,7 @@
  * used V1 will look for the paste step.
  */
 
+import { McpConnections } from "@/components/McpConnections";
 import { SessionGate } from "@/components/SessionGate";
 import { TopBar } from "@/components/TopBar";
 import { CopyButton } from "@/components/ui";
@@ -23,7 +24,7 @@ export function ConnectView({ url }: { url: string }) {
       {(user) => (
         <>
           <TopBar email={user.email} />
-          <main className="thin-scroll mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6">
+          <main className="rise thin-scroll mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6">
             <h1 className="text-xl font-semibold tracking-tight">
               Connect Claude, ChatGPT, Grok or Kimi
             </h1>
@@ -84,6 +85,8 @@ export function ConnectView({ url }: { url: string }) {
                 paste any instructions into a project: the MCP server sends them itself.
               </Step>
             </ol>
+
+            <McpConnections />
 
             <section className="mt-8 rounded-xl border border-line bg-surface px-4 py-3 text-sm">
               <h2 className="font-medium">Check it without pasting a prompt</h2>

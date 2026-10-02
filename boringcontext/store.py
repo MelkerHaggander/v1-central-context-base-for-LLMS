@@ -1,6 +1,7 @@
 import math
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from boringcontext.brain import (
@@ -16,10 +17,48 @@ from boringcontext.jsonutil import js_json
 from boringcontext.validate import fail, validate_memory_id, validate_memory_input, validate_search_input
 
 PAGE_SIZE = 50
+DELETION_RETENTION_DAYS = 30
 CONTEXT_ITEM_LIMIT = 8
 CONTEXT_SNIPPET_LIMIT = 280
 CONTEXT_JSON_LIMIT = 3500
 SAVED_ROW_LIMIT = 8
+
+
+def _as_utc(moment: datetime) -> datetime:
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def deletion_retention_cutoff(now: datetime | float | None = None) -> str:
+    if isinstance(now, (int, float)):
+        moment = datetime.fromtimestamp(now / 1000, tz=timezone.utc)
+    elif isinstance(now, datetime):
+        moment = _as_utc(now)
+    else:
+        moment = datetime.now(timezone.utc)
+    cutoff = moment - timedelta(days=DELETION_RETENTION_DAYS)
+    return cutoff.isoformat().replace("+00:00", "Z")
+
+
+def keep_recent_deletions(rows: list[dict], now: datetime | float | None = None) -> list[dict]:
+    if isinstance(now, (int, float)):
+        moment = datetime.fromtimestamp(now / 1000, tz=timezone.utc)
+    elif isinstance(now, datetime):
+        moment = _as_utc(now)
+    else:
+        moment = datetime.now(timezone.utc)
+    cutoff = moment - timedelta(days=DELETION_RETENTION_DAYS)
+    kept = []
+    for row in rows:
+        raw = str(row.get("created_at") or "")
+        try:
+            at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if _as_utc(at) >= cutoff:
+            kept.append(row)
+    return kept
 
 STOP_WORDS = {
     "ahead", "after", "about", "again", "also", "alla", "allt", "am", "and",
@@ -416,6 +455,10 @@ class MemoryApi:
         spaces = getattr(self.brain, "spaces", None) if self.brain else None
         return await list_memory_versions(user_id, memory_id, self.store, spaces)
 
+    async def list_deletions(self, user_id: str, space_id: str) -> dict:
+        spaces = getattr(self.brain, "spaces", None) if self.brain else None
+        return await list_deletions(user_id, space_id, self.store, spaces)
+
 
 def create_memory_api(store: Any, brain: Any | None = None) -> MemoryApi:
     return MemoryApi(store, brain)
@@ -735,6 +778,8 @@ async def save_dashboard_memory(user_id: str, memory: dict, space_id: str, store
         )
     )
     if saved["kind"] == "failed":
+        if saved.get("code") == "DUPLICATE_TITLE":
+            return fail("DUPLICATE_TITLE", saved["message"])
         return fail("SAVE_FAILED", "Kunde inte spara minnet.")
     await attach_embedding(store, getattr(brain, "embedding", None), saved["row"])
     return {"data": saved["row"]}
@@ -795,6 +840,20 @@ async def list_memory_versions(user_id: str, memory_id: str, store: Any, spaces:
             for version in versions
         ]
     }
+
+
+async def list_deletions(user_id: str, space_id: str, store: Any, spaces: Any | None = None) -> dict:
+    if getattr(store, "list_deletions", None) is None:
+        return {"data": []}
+    if spaces is not None:
+        try:
+            member = await _maybe(spaces.is_member(user_id, space_id))
+        except Exception:
+            member = False
+        if not member:
+            return fail("FORBIDDEN", "Du är inte medlem i det utrymmet.")
+    rows = await _maybe(store.list_deletions(space_id))
+    return {"data": keep_recent_deletions(rows or [])}
 
 
 async def _load_owned(user_id: str, memory_id: str, store: Any, spaces: Any | None) -> dict:
@@ -858,6 +917,8 @@ async def update_memory(user_id: str, memory: dict, store: Any, brain: Any | Non
         return {"data": updated["row"]}
     if updated["kind"] == "missing":
         return fail("NOT_FOUND", "Minnet finns inte eller tillhör ett annat konto.")
+    if updated["kind"] == "failed" and updated.get("code") == "DUPLICATE_TITLE":
+        return fail("DUPLICATE_TITLE", updated["message"])
     return fail("UPDATE_FAILED", "Kunde inte uppdatera minnet.")
 
 
