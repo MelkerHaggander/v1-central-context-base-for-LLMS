@@ -10,7 +10,7 @@ type Launch = {
   command: string;
   cwd: string;
   pythonPath: string;
-  extraEnv: NodeJS.ProcessEnv;
+  extraEnv: Record<string, string>;
 };
 
 function bundledLaunch(dir: string): Launch | null {
