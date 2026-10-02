@@ -6,7 +6,7 @@
  * always required. Project is optional: a memory from Memories can stand alone;
  * saving from a project (or editing) still shows the project field.
  *
- * The limits below are the same ones packages/memory/src/validate.ts enforces,
+ * The limits below are the same ones boringcontext enforces,
  * checked in the same order (project, title, content, category), so the reader
  * sees the problem before the round trip instead of a bare INVALID_TITLE after
  * it. The server stays the authority: if it refuses anyway, its code and message

@@ -1,7 +1,7 @@
 /**
  * What the AI saved on its own, waiting for a human look.
  *
- * Every get_context call can write new memories (packages/memory, source
+ * Every get_context call can write new memories (boringcontext, source
  * "brain"), and nobody sees them being written. A wrong one becomes wrong
  * context in every later chat. So the dashboard keeps a review inbox: memories
  * with source "brain" that this reader has not yet kept, fixed or deleted.

@@ -14,8 +14,8 @@ describe("lesson_memory är HTTP, inte MCP", () => {
     assert.match(MEMORY_INSTRUCTIONS, /The server chooses the category/);
   });
 
-  it("HTTP-rutten ignorerar inskickad category och tvingar saveLesson", () => {
-    assert.match(httpSrc, /api\.saveLesson/);
+  it("HTTP-rutten ignorerar inskickad category och tvingar save_lesson", () => {
+    assert.match(httpSrc, /callPythonBrain\(\s*"save_lesson"/);
     assert.equal(/category:\s*String\(body\.category/.test(httpSrc), false);
   });
 });

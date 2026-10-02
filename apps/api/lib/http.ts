@@ -9,7 +9,7 @@ export function jsonOk(body: unknown, status = 200, extraHeaders?: Record<string
   return NextResponse.json(body, { status, headers: { ...NO_STORE, ...extraHeaders } });
 }
 
-/** Lista/objekt som tillhör cookiens användare. Klienten vägrar visa raderna om id inte stämmer. */
+/** The cookie's user. The client hides the rows when this id does not match. */
 export function jsonOwned(body: unknown, userId: string, status = 200) {
   return jsonOk(body, status, { "X-V1-User-Id": userId });
 }

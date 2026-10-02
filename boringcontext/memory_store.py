@@ -322,6 +322,15 @@ class InMemoryStore:
         row = self._find(memory_id)
         return bool(row and row["embedding"])
 
+    async def list_deletions(self, space_id: str) -> list[dict]:
+        rows = [
+            self._public_version(version)
+            for version in self._versions
+            if version["event"] == "delete" and version.get("space_id") == space_id
+        ]
+        rows.sort(key=lambda version: version["created_at"], reverse=True)
+        return rows
+
     async def list_versions(self, memory_id: str) -> list[dict] | None:
         history = self._history(memory_id)
         if self._find(memory_id) is None and not history:

@@ -288,6 +288,97 @@ def _jwt_bearer(bearer: str) -> bool:
     return bearer.count(".") == 2 and bearer.startswith("eyJ")
 
 
+def _fields(body: dict) -> dict:
+    return {
+        "project": str(body.get("project") or ""),
+        "category": str(body.get("category") or ""),
+        "title": str(body.get("title") or ""),
+        "content": str(body.get("content") or ""),
+    }
+
+
+def _js_number(value: Any) -> float:
+    if isinstance(value, bool):
+        return float("nan")
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return float("nan")
+    return float("nan")
+
+
+def _offset(value: Any) -> float:
+    if value is None or value == "":
+        return 0.0
+    return _js_number(value)
+
+
+def _search(body: dict) -> dict:
+    return {
+        "project": None if body.get("project") is None else str(body.get("project")),
+        "category": None if body.get("category") is None else str(body.get("category")),
+        "query": None if body.get("query") is None else str(body.get("query")),
+        "offset": _offset(body.get("offset")),
+    }
+
+
+async def dispatch_brain(api: Any, op: str, user_id: str, payload: dict) -> dict:
+    """MCP and the dashboard share one dispatch so the thresholds cannot drift."""
+    if op == "get_context":
+        context = {"prompt": payload["prompt"] if isinstance(payload.get("prompt"), str) else ""}
+        if isinstance(payload.get("project"), str):
+            context["project"] = payload["project"]
+        return await api.get_context(user_id, context)
+    if op == "save_brief":
+        return await api.save_brief(user_id, payload)
+    if op == "save_memory":
+        return await api.save_memory(user_id, _fields(payload))
+    if op == "save_lesson":
+        # The caller may send a category. lesson_memory always stores lesson.
+        return await api.save_lesson(
+            user_id,
+            {
+                "project": str(payload.get("project") or ""),
+                "title": str(payload.get("title") or ""),
+                "content": str(payload.get("content") or ""),
+            },
+        )
+    if op == "update_memory":
+        return await api.update_memory(
+            user_id,
+            {
+                **_fields(payload),
+                "id": str(payload.get("id") or ""),
+                "allow_project_change": payload.get("allow_project_change") is True,
+            },
+        )
+    if op == "search_memory":
+        return await api.search_memory(user_id, _search(payload))
+    if op == "save_dashboard":
+        space_id = str(payload.get("space_id") or "").strip()
+        if not space_id:
+            return {"error": {"code": "INVALID_SPACE", "message": "space_id krävs."}}
+        return await api.save_dashboard_memory(user_id, _fields(payload), space_id)
+    if op == "delete_memory":
+        return await api.delete_memory(user_id, str(payload.get("id") or ""))
+    if op == "search_in_space":
+        space_id = str(payload.get("space_id") or "").strip()
+        if not space_id:
+            return {"error": {"code": "INVALID_SPACE", "message": "space_id krävs."}}
+        return await api.search_in_space(user_id, space_id, _search(payload))
+    if op == "list_versions":
+        return await api.list_versions(user_id, str(payload.get("id") or ""))
+    if op == "list_deletions":
+        space_id = str(payload.get("space_id") or "").strip()
+        if not space_id:
+            return {"error": {"code": "INVALID_SPACE", "message": "space_id krävs."}}
+        return await api.list_deletions(user_id, space_id)
+    return {"error": {"code": "INVALID_BODY", "message": "Okänd operation."}}
+
+
 async def run_brain_call(
     op: str,
     user_id: str,
@@ -297,17 +388,13 @@ async def run_brain_call(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> dict:
-    """Run get_context or save_brief. Ranking and formulation stay in this package."""
+    """Run one memory operation. Ranking and formulation stay in this package."""
     embedding = create_embedding_client(env, transport)
     formulator = create_formulator_client(env, transport)
     config = supabase_config(env)
     if config is None:
         api = create_memory_api(InMemoryStore(), type("Brain", (), {"spaces": None, "embedding": embedding, "formulator": formulator})())
-        if op == "get_context":
-            return await api.get_context(user_id, payload)
-        if op == "save_brief":
-            return await api.save_brief(user_id, payload)
-        return {"error": {"code": "INVALID_BODY", "message": "Okänd operation."}}
+        return await dispatch_brain(api, op, user_id, payload)
 
     url, key = config
     client = PostgrestClient(url, key, transport=transport)
@@ -337,10 +424,6 @@ async def run_brain_call(
     api = create_memory_api(store, brain)
     marker = access_token.set(space_token)
     try:
-        if op == "get_context":
-            return await api.get_context(user_id, payload)
-        if op == "save_brief":
-            return await api.save_brief(user_id, payload)
-        return {"error": {"code": "INVALID_BODY", "message": "Okänd operation."}}
+        return await dispatch_brain(api, op, user_id, payload)
     finally:
         access_token.reset(marker)

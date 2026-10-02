@@ -1,6 +1,7 @@
 from typing import Any
 
 from boringcontext.clock import to_iso
+from boringcontext.store import deletion_retention_cutoff
 
 MEMORY_COLUMNS = "id, project, category, title, content, created_at, updated_at"
 VERSION_COLUMNS = (
@@ -355,6 +356,20 @@ class SupabaseStore:
             raise RuntimeError(result["error"].get("message", "select failed"))
         embedding = (result["data"] or {}).get("embedding") if result["data"] else None
         return _embedding_present(embedding)
+
+    async def list_deletions(self, space_id: str) -> list[dict]:
+        # The SQL cutoff only shrinks the transfer. keep_recent_deletions is the rule.
+        result = await (
+            self.client.table("memory_versions")
+            .select(VERSION_COLUMNS)
+            .eq("space_id", space_id)
+            .eq("event", "delete")
+            .gte("created_at", deletion_retention_cutoff())
+            .order("created_at", ascending=False)
+        )
+        if result["error"]:
+            raise RuntimeError(result["error"].get("message", "select failed"))
+        return [_as_version(row) for row in result["data"] or []]
 
     async def list_versions(self, memory_id: str) -> list[dict]:
         result = await (

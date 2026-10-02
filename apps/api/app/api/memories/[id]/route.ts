@@ -1,34 +1,14 @@
-import { createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOwned } from "@/lib/http";
-import { deleteMemoryHttp, patchMemory } from "@/lib/memory-http";
-import { createBrainClients } from "@/lib/memory-clients";
-import { createSupabaseSpaceAccess } from "@/lib/space-access";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { callPythonBrain, memoryHttpStatus } from "@/lib/python-brain";
+import { signedIn } from "@/lib/signed-in";
 
 export const dynamic = "force-dynamic";
-
-async function requireUser() {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return { error: jsonError("UNAUTHENTICATED", "Inte inloggad.", 401) };
-  }
-  return { supabase, userId: data.user.id };
-}
-
-function deps(supabase: { from: Parameters<typeof createSupabaseStore>[0]["from"] }) {
-  return {
-    store: createSupabaseStore(supabase),
-    spaces: createSupabaseSpaceAccess(supabase),
-    embedding: createBrainClients().embedding,
-  };
-}
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireUser();
+  const auth = await signedIn();
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
@@ -39,26 +19,36 @@ export async function PATCH(
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const result = await patchMemory(auth.userId, id, body, deps(auth.supabase));
-  if (result.status >= 400) {
-    const errorBody = result.body as { error: { code: string; message: string } };
-    return jsonError(errorBody.error.code, errorBody.error.message, result.status);
+  const result = await callPythonBrain(
+    "update_memory",
+    auth.userId,
+    {
+      id,
+      project: String(body.project ?? ""),
+      category: String(body.category ?? ""),
+      title: String(body.title ?? ""),
+      content: String(body.content ?? ""),
+      allow_project_change: body.allow_project_change === true,
+    },
+    auth.bearer,
+  );
+  if (result.error) {
+    return jsonError(result.error.code, result.error.message, memoryHttpStatus(result.error.code, "update"));
   }
-  return jsonOwned(result.body, auth.userId);
+  return jsonOwned(result.data, auth.userId);
 }
 
 export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireUser();
+  const auth = await signedIn();
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const result = await deleteMemoryHttp(auth.userId, id, deps(auth.supabase));
-  if (result.status >= 400) {
-    const errorBody = result.body as { error: { code: string; message: string } };
-    return jsonError(errorBody.error.code, errorBody.error.message, result.status);
+  const result = await callPythonBrain("delete_memory", auth.userId, { id }, auth.bearer);
+  if (result.error) {
+    return jsonError(result.error.code, result.error.message, memoryHttpStatus(result.error.code, "remove"));
   }
-  return jsonOwned(result.body, auth.userId);
+  return jsonOwned(result.data, auth.userId);
 }

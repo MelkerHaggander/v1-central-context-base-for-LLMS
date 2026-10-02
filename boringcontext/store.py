@@ -455,6 +455,10 @@ class MemoryApi:
         spaces = getattr(self.brain, "spaces", None) if self.brain else None
         return await list_memory_versions(user_id, memory_id, self.store, spaces)
 
+    async def list_deletions(self, user_id: str, space_id: str) -> dict:
+        spaces = getattr(self.brain, "spaces", None) if self.brain else None
+        return await list_deletions(user_id, space_id, self.store, spaces)
+
 
 def create_memory_api(store: Any, brain: Any | None = None) -> MemoryApi:
     return MemoryApi(store, brain)
@@ -836,6 +840,20 @@ async def list_memory_versions(user_id: str, memory_id: str, store: Any, spaces:
             for version in versions
         ]
     }
+
+
+async def list_deletions(user_id: str, space_id: str, store: Any, spaces: Any | None = None) -> dict:
+    if getattr(store, "list_deletions", None) is None:
+        return {"data": []}
+    if spaces is not None:
+        try:
+            member = await _maybe(spaces.is_member(user_id, space_id))
+        except Exception:
+            member = False
+        if not member:
+            return fail("FORBIDDEN", "Du är inte medlem i det utrymmet.")
+    rows = await _maybe(store.list_deletions(space_id))
+    return {"data": keep_recent_deletions(rows or [])}
 
 
 async def _load_owned(user_id: str, memory_id: str, store: Any, spaces: Any | None) -> dict:

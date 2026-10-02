@@ -19,8 +19,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@v1/memory": ["./vendor/memory/src/index.ts"]
+      "@/*": ["./*"]
     }
   },
   "include": [

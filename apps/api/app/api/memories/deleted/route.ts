@@ -1,31 +1,29 @@
-import { createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOwned } from "@/lib/http";
-import { getDeletedMemories } from "@/lib/memory-http";
-import { createSupabaseSpaceAccess } from "@/lib/space-access";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { callPythonBrain, memoryHttpStatus } from "@/lib/python-brain";
+import { signedIn } from "@/lib/signed-in";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Lists delete history still inside the 30-day window.
- * Rows older than that are removed by the Supabase cron
- * purge_expired_deleted_memories (migration 20261001190000), not here.
+ * Older rows are removed by the Supabase cron purge_expired_deleted_memories
+ * (migration 20261001190000), not on this request, so a list stays a read.
  */
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
-  }
+  const auth = await signedIn();
+  if ("error" in auth) return auth.error;
 
   const spaceId = new URL(request.url).searchParams.get("space_id") ?? "";
-  const result = await getDeletedMemories(data.user.id, spaceId, {
-    store: createSupabaseStore(supabase),
-    spaces: createSupabaseSpaceAccess(supabase),
-  });
-  if (result.status >= 400) {
-    const body = result.body as { error: { code: string; message: string } };
-    return jsonError(body.error.code, body.error.message, result.status);
+  if (!spaceId.trim()) return jsonError("INVALID_SPACE", "space_id krävs.", 400);
+
+  const result = await callPythonBrain(
+    "list_deletions",
+    auth.userId,
+    { space_id: spaceId },
+    auth.bearer,
+  );
+  if (result.error) {
+    return jsonError(result.error.code, result.error.message, memoryHttpStatus(result.error.code, "list"));
   }
-  return jsonOwned(result.body, data.user.id);
+  return jsonOwned(result.data, auth.userId);
 }

@@ -1,5 +1,5 @@
 /**
- * The same limits and the same order as packages/memory/src/validate.ts, checked
+ * The same limits and the same order as boringcontext validation, checked
  * in the browser so the reader sees the problem before the round trip instead of
  * a bare INVALID_TITLE after it.
  *

@@ -84,12 +84,46 @@ export function pythonBrainCanStart(): Promise<boolean> {
   });
 }
 
+export type BrainOp =
+  | "get_context"
+  | "save_brief"
+  | "save_memory"
+  | "save_lesson"
+  | "update_memory"
+  | "search_memory"
+  | "save_dashboard"
+  | "delete_memory"
+  | "search_in_space"
+  | "list_versions"
+  | "list_deletions";
+
+export type MemorySurface = "save" | "search" | "update" | "create" | "remove" | "list";
+
+/** Status codes stay with the route. Python only returns the error code. */
+export function memoryHttpStatus(code: string, surface: MemorySurface): number {
+  if (surface === "search") return 400;
+  if (surface === "list") return code === "FORBIDDEN" ? 403 : 400;
+  if (surface === "save") return code.startsWith("INVALID_") ? 400 : 500;
+  if (code === "NOT_FOUND") return 404;
+  if (code === "FORBIDDEN") return 403;
+  if (code === "DUPLICATE_TITLE" && (surface === "create" || surface === "update")) return 409;
+  if (
+    code.startsWith("INVALID_") ||
+    code === "PROJECT_CHANGE_REQUIRES_FLAG" ||
+    code === "LESSON_CATEGORY_REQUIRES_TOOL"
+  ) {
+    return 400;
+  }
+  return 500;
+}
+
 /**
- * Formulation and ranking run in the Python package. This process only
- * forwards the already-authenticated call.
+ * Ranking, thresholds and writes run in one Python package. This process only
+ * forwards a call Next has already authenticated, so dashboard and MCP cannot
+ * drift apart.
  */
 export function callPythonBrain(
-  op: "get_context" | "save_brief",
+  op: BrainOp,
   userId: string,
   input: unknown,
   bearer: string,

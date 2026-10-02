@@ -1,9 +1,21 @@
-import type { SpaceAccess, SpaceKind, SpaceRef } from "@v1/memory";
+type SpaceKind = "personal" | "shared";
+
+type SpaceRef = {
+  id: string;
+  kind: SpaceKind;
+};
 
 type SpaceDb = {
   from(table: string): {
     select(columns: string): any;
   };
+};
+
+export type SpaceAccess = {
+  readableSpaceIds(userId: string): Promise<string[]>;
+  listSpaces(userId: string): Promise<SpaceRef[]>;
+  spaceFor(userId: string, kind: SpaceKind): Promise<string | null>;
+  isMember(userId: string, spaceId: string): Promise<boolean>;
 };
 
 export function createSupabaseSpaceAccess(client: SpaceDb): SpaceAccess {

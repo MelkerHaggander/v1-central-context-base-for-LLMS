@@ -146,3 +146,82 @@ async def test_invoke_without_supabase_does_not_open_a_network():
     result = await run_brain_call("get_context", USER_A, {"prompt": "hej"}, "", {})
     assert result["data"]["items"] == []
     assert result["data"]["written"] == []
+
+
+@pytest.mark.asyncio
+async def test_invoke_four_fields_ignore_a_lesson_category_and_unknown_ops():
+    saved = await run_brain_call(
+        "save_memory",
+        USER_A,
+        {"project": "Projekt A", "category": "fact", "title": "Titel", "content": "Innehåll som räcker."},
+        "",
+        {},
+    )
+    assert saved["data"]["title"] == "Titel"
+    assert saved["data"]["category"] == "fact"
+    lesson = await run_brain_call(
+        "save_lesson",
+        USER_A,
+        {"project": "Projekt A", "category": "fact", "title": "Regel", "content": "Svara kort nästa gång."},
+        "",
+        {},
+    )
+    assert lesson["data"]["category"] == "lesson"
+    missing = await run_brain_call("update_memory", USER_A, {"id": "not-a-uuid"}, "", {})
+    assert missing["error"]["code"] == "INVALID_ID"
+    empty = await run_brain_call("search_memory", USER_A, {}, "", {})
+    assert empty["data"] == []
+    denied = await run_brain_call("save_dashboard", USER_A, {"space_id": PERSONAL, "project": "P", "category": "fact", "title": "T", "content": "C"}, "", {})
+    assert denied["error"]["code"] == "FORBIDDEN"
+    unknown = await run_brain_call("delete_everything", USER_A, {}, "", {})
+    assert unknown["error"]["code"] == "INVALID_BODY"
+
+
+@pytest.mark.asyncio
+async def test_delete_list_names_who_removed_the_text():
+    store = InMemoryStore()
+    api = create_memory_api(store, Brain(Spaces([{"id": SHARED, "kind": "shared"}])))
+    saved = await api.save_dashboard_memory(
+        USER_A,
+        {"project": "Team", "category": "decision", "title": "Verktyg", "content": "Vi valde verktyg A."},
+        PERSONAL,
+    )
+    assert "data" in saved
+    removed = await api.delete_memory("other-member", saved["data"]["id"])
+    assert removed["data"]["success"] is True
+    listed = await api.list_deletions(USER_A, PERSONAL)
+    assert listed["data"][0]["event"] == "delete"
+    assert listed["data"][0]["changed_by"] == "other-member"
+    assert listed["data"][0]["content_before"] == "Vi valde verktyg A."
+
+    class Closed:
+        async def is_member(self, user_id, space_id):
+            return user_id == USER_A and space_id == PERSONAL
+
+    outsider = create_memory_api(store, type("Brain", (), {"spaces": Closed()})())
+    blocked = await outsider.list_deletions("outsider", PERSONAL)
+    assert blocked["error"]["code"] == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_context_items_omit_the_user_and_the_full_text():
+    memory = create_memory_api(InMemoryStore())
+    saved = await memory.save_memory(
+        USER_A,
+        {"project": "Projekt A", "category": "deadline", "title": "Lanseringsdatum", "content": "Vi lanserar 15 oktober 2026."},
+    )
+    result = await memory.get_context(USER_A, {"prompt": "När ska vi lansera?", "project": "Projekt A"})
+    item = result["data"]["items"][0]
+    assert item == {
+        "id": saved["data"]["id"],
+        "project": "Projekt A",
+        "category": "deadline",
+        "title": "Lanseringsdatum",
+        "snippet": "Vi lanserar 15 oktober 2026.",
+        "updated_at": saved["data"]["updated_at"],
+        "source": "user_memory",
+    }
+    dumped = json.dumps(result["data"])
+    assert "user_id" not in dumped
+    assert "created_at" not in dumped
+    assert '"content"' not in dumped

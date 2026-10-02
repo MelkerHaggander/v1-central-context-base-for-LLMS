@@ -1,15 +1,12 @@
-import { createMemoryApi, createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOk } from "@/lib/http";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { callPythonBrain, memoryHttpStatus } from "@/lib/python-brain";
+import { signedIn } from "@/lib/signed-in";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return jsonError("UNAUTHENTICATED", "Inte inloggad.", 401);
-  }
+  const auth = await signedIn();
+  if ("error" in auth) return auth.error;
 
   let body: Record<string, unknown>;
   try {
@@ -18,26 +15,22 @@ export async function POST(request: Request) {
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const api = createMemoryApi(createSupabaseStore(supabase));
-  const result = await api.updateMemory(data.user.id, {
-    id: String(body.id ?? ""),
-    project: String(body.project ?? ""),
-    category: String(body.category ?? ""),
-    title: String(body.title ?? ""),
-    content: String(body.content ?? ""),
-    allow_project_change: body.allow_project_change === true,
-  });
+  const result = await callPythonBrain(
+    "update_memory",
+    auth.userId,
+    {
+      id: String(body.id ?? ""),
+      project: String(body.project ?? ""),
+      category: String(body.category ?? ""),
+      title: String(body.title ?? ""),
+      content: String(body.content ?? ""),
+      allow_project_change: body.allow_project_change === true,
+    },
+    auth.bearer,
+  );
 
-  if ("error" in result) {
-    const status =
-      result.error.code === "NOT_FOUND"
-        ? 404
-        : result.error.code.startsWith("INVALID_") ||
-            result.error.code === "PROJECT_CHANGE_REQUIRES_FLAG" ||
-            result.error.code === "LESSON_CATEGORY_REQUIRES_TOOL"
-          ? 400
-          : 500;
-    return jsonError(result.error.code, result.error.message, status);
+  if (result.error) {
+    return jsonError(result.error.code, result.error.message, memoryHttpStatus(result.error.code, "update"));
   }
   return jsonOk(result.data);
 }

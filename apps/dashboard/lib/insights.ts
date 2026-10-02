@@ -222,7 +222,7 @@ export function changedSince(memory: Pick<Memory, "updated_at">, since: string |
 /* ------------------------------ projects ------------------------------ */
 
 /**
- * The server's rule (projectKey in packages/memory/src/brain.ts): lower case,
+ * The server's rule (project_key in boringcontext): lower case,
  * whitespace and hyphens removed. Mirrored here only to warn before saving.
  */
 export function projectKey(project: string): string {

@@ -1,9 +1,8 @@
 /**
- * Simulerad lagring för fristående läge. Speglar reglerna i Melkers @v1/memory
- * (validering, dubbletter, sökstädning, sidstorlek 50, felkoder) så att vyerna
- * inte behöver byggas om när mocken byts mot riktigt API.
- *
- * Lagringen är per serverprocess. Startar om vid omstart. Det räcker för mock.
+ * Stand-in store so the screens run without the API. It follows boringcontext
+ * (validation, duplicates, search cleanup, page size 50, error codes) so a
+ * later switch to the real API does not change the views.
+ * Rows live in this process and disappear on restart.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -104,14 +103,14 @@ export function validateMemoryId(id: string) {
 }
 
 /**
- * Same rule as projectKey() in packages/memory/src/brain.ts: lower case, no
+ * Same rule as project_key in boringcontext: lower case, no
  * whitespace, no hyphens. "Boring Context" and "boringcontext" are one project.
  */
 export function projectKey(project: string): string {
   return project.normalize("NFKC").toLocaleLowerCase("sv-SE").replace(/[\s-]+/gu, "");
 }
 
-/** canonicalProject() in brain.ts: reuse the saved spelling when the key matches. */
+/** Reuse the saved spelling when the key matches, same as the brain. */
 export function canonicalProject(requested: string, existing: readonly string[]): string {
   const trimmed = requested.trim();
   const key = projectKey(trimmed);
@@ -240,7 +239,7 @@ export class MockMemoryStore {
     return row.space_id ? this.isMember(userId, row.space_id) : row.user_id === userId;
   }
 
-  /** GET /api/memories?space_id=. searchInSpace() in packages/memory/src/store.ts. */
+  /** One space only, so a shared list cannot leak into another space. */
   searchInSpace(userId: string, spaceId: string, input: SearchInput): Result<Memory[]> {
     if (!spaceId.trim()) return fail("INVALID_SPACE", "space_id is required.");
     if (!this.isMember(userId, spaceId)) return fail("FORBIDDEN", NOT_MEMBER);
@@ -311,9 +310,8 @@ export class MockMemoryStore {
   }
 
   /**
-   * GET /api/memories/deleted?space_id=. listDeletions() in
-   * packages/memory/src/store.ts: the delete events of one space, newest
-   * first, for members only. Only the last 30 days are kept.
+   * Delete events of one space, newest first, for members only.
+   * Only the last 30 days are kept, matching the brain.
    */
   listDeletions(userId: string, spaceId: string): Result<MemoryVersion[]> {
     if (!spaceId.trim()) return fail("INVALID_SPACE", "space_id is required.");

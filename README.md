@@ -38,7 +38,7 @@ The tests stay offline.
 
 The globe, the dashboard, login, and the OAuth pages that Claude, ChatGPT, and Grok use stay in `apps/api`. That UI is React and a client-side canvas, the same screens as v1.2. `npm` scripts in `apps/api` open it.
 
-`get_context` and `save_memory` do not run the TypeScript memory package. The MCP route and `POST /api/mcp/get_context` call `python -m boringcontext.invoke`. Python does the ranking, the team-or-personal choice, same-subject updates, and the before/after history. Dashboard edits, spaces, and members still use the Next routes so the screens stay the same.
+The brain is the `boringcontext` package. `get_context`, `save_memory`, dashboard create, update and delete, and the HTTP routes for the four fields call `python -m boringcontext.invoke`. Python does the ranking, the team-or-personal choice, same-subject updates, and the before/after history. Spaces and members stay in the Next routes so the screens stay the same.
 
 Set `SUPABASE_URL` and an anon or publishable key in the environment of both processes. Set `NEXT_PUBLIC_APP_URL` to the host you serve. Do not point those variables at someone else's project. Do not commit keys.
 

@@ -1,43 +1,40 @@
-import { createSupabaseStore } from "@v1/memory";
 import { jsonError, jsonOwned } from "@/lib/http";
-import { getMemories, postMemory } from "@/lib/memory-http";
-import { createBrainClients } from "@/lib/memory-clients";
-import { createSupabaseSpaceAccess } from "@/lib/space-access";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { callPythonBrain, memoryHttpStatus, type MemorySurface } from "@/lib/python-brain";
+import { signedIn } from "@/lib/signed-in";
 
 export const dynamic = "force-dynamic";
 
-async function requireUser() {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return { error: jsonError("UNAUTHENTICATED", "Inte inloggad.", 401) };
-  }
-  return { supabase, userId: data.user.id };
-}
-
-function deps(supabase: { from: Parameters<typeof createSupabaseStore>[0]["from"] }) {
-  return {
-    store: createSupabaseStore(supabase),
-    spaces: createSupabaseSpaceAccess(supabase),
-    embedding: createBrainClients().embedding,
-  };
+function refused(code: string, message: string, surface: MemorySurface) {
+  return jsonError(code, message, memoryHttpStatus(code, surface));
 }
 
 export async function GET(request: Request) {
-  const auth = await requireUser();
+  const auth = await signedIn();
   if ("error" in auth) return auth.error;
 
-  const result = await getMemories(auth.userId, new URL(request.url), deps(auth.supabase));
-  if (result.status >= 400) {
-    const body = result.body as { error: { code: string; message: string } };
-    return jsonError(body.error.code, body.error.message, result.status);
-  }
-  return jsonOwned(result.body, auth.userId);
+  const url = new URL(request.url);
+  const spaceId = (url.searchParams.get("space_id") ?? "").trim();
+  if (!spaceId) return jsonError("INVALID_SPACE", "space_id krävs.", 400);
+
+  const offsetRaw = url.searchParams.get("offset");
+  const result = await callPythonBrain(
+    "search_in_space",
+    auth.userId,
+    {
+      space_id: spaceId,
+      project: url.searchParams.get("project") ?? "",
+      category: url.searchParams.get("category") ?? "",
+      query: url.searchParams.get("query") ?? "",
+      offset: offsetRaw == null || offsetRaw === "" ? 0 : offsetRaw,
+    },
+    auth.bearer,
+  );
+  if (result.error) return refused(result.error.code, result.error.message, "list");
+  return jsonOwned(result.data, auth.userId);
 }
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await signedIn();
   if ("error" in auth) return auth.error;
 
   let body: Record<string, unknown>;
@@ -47,10 +44,21 @@ export async function POST(request: Request) {
     return jsonError("INVALID_BODY", "Ogiltig JSON.", 400);
   }
 
-  const result = await postMemory(auth.userId, body, deps(auth.supabase));
-  if (result.status >= 400) {
-    const errorBody = result.body as { error: { code: string; message: string } };
-    return jsonError(errorBody.error.code, errorBody.error.message, result.status);
-  }
-  return jsonOwned(result.body, auth.userId, result.status);
+  const spaceId = typeof body.space_id === "string" ? body.space_id.trim() : "";
+  if (!spaceId) return jsonError("INVALID_SPACE", "space_id krävs.", 400);
+
+  const result = await callPythonBrain(
+    "save_dashboard",
+    auth.userId,
+    {
+      space_id: spaceId,
+      project: String(body.project ?? ""),
+      category: String(body.category ?? ""),
+      title: String(body.title ?? ""),
+      content: String(body.content ?? ""),
+    },
+    auth.bearer,
+  );
+  if (result.error) return refused(result.error.code, result.error.message, "create");
+  return jsonOwned(result.data, auth.userId, 201);
 }
